@@ -1,0 +1,19 @@
+{
+  "$schema": "https://code.claude.com/marketplace.schema.json",
+  "name": "cdx",
+  "description": "cdx plugin self-marketplace for local/path installs.",
+  "owner": {
+    "name": "Nuko Nova Dynamics",
+    "email": "hello@nukonova.com"
+  },
+  "plugins": [
+    {
+      "name": "cdx",
+      "source": "./",
+      "description": "Full-surface Codex CLI integration: delegate, review, fan out, resume, and act on structured Codex results.",
+      "license": "Apache-2.0",
+      "category": "agent-tooling",
+      "tags": ["codex", "delegation", "review", "multi-model"]
+    }
+  ]
+}

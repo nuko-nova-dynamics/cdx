@@ -1,0 +1,13 @@
+{
+  "name": "cdx",
+  "version": "0.1.0",
+  "description": "Full-surface Codex CLI integration: delegate, review, fan out, resume, and act on structured Codex results. Claude drives codex directly — no middleman runtime.",
+  "author": {
+    "name": "Nuko Nova Dynamics",
+    "email": "hello@nukonova.com"
+  },
+  "homepage": "https://github.com/nuko-nova-dynamics/cdx",
+  "repository": "https://github.com/nuko-nova-dynamics/cdx",
+  "license": "Apache-2.0",
+  "keywords": ["codex", "openai", "delegation", "code-review", "multi-model"]
+}

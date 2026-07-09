@@ -1,0 +1,7 @@
+cdx — Claude Code plugin
+Copyright 2026 Nuko Nova Dynamics
+
+The prompting reference files under skills/prompting-codex/references/
+are adapted from the "gpt-5-4-prompting" skill in openai/codex-plugin-cc
+(https://github.com/openai/codex-plugin-cc), licensed under the
+Apache License, Version 2.0.
