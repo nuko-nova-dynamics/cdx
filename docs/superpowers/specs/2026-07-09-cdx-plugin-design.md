@@ -28,7 +28,7 @@ The user will almost always invoke Codex by prose ("spawn codex on this", "get c
 ### 4.1 Skills (3)
 
 **`driving-codex`** (core; auto-triggers per §3)
-- Non-interactive invocation contract: `codex exec` with explicit `--sandbox`, `-a never` pinned (approval prompts would hang a non-interactive run), `-o <scratch>/last-message.txt`, `--json` streamed to a scratch file via the runner script, `--skip-git-repo-check` only when genuinely outside a repo.
+- Non-interactive invocation contract: `codex exec` with explicit `--sandbox` (verified: `codex exec` rejects `-a/--ask-for-approval` — it is inherently non-interactive, so sandbox is the only control), `-o <scratch>/last-message.txt`, `--json` streamed to a scratch file via the runner script, `--skip-git-repo-check` only when genuinely outside a repo.
 - Flag-selection heuristics:
   - sandbox: `read-only` for review/research/diagnosis; `workspace-write` for fix/implement (default); `danger-full-access` only on explicit user request.
   - effort: leave unset by default; `xhigh` for gnarly debugging on explicit "think hard"-type asks; `low/minimal` for mechanical bulk edits.
@@ -70,8 +70,7 @@ The user will almost always invoke Codex by prose ("spawn codex on this", "get c
 
 ### 4.5 Safety defaults
 
-- Always pin `-a never` on non-interactive runs.
-- Sandbox is always explicit; default `workspace-write` for mutating tasks, `read-only` otherwise.
+- Sandbox is always explicit (it is the sole non-interactive control — `codex exec` accepts no approval flag); default `workspace-write` for mutating tasks, `read-only` otherwise.
 - `danger-full-access` only when the user explicitly asks (`--sandbox full` or equivalent prose); confirm once before first use in a session.
 - Never `--dangerously-bypass-approvals-and-sandbox`; never `--dangerously-bypass-hook-trust`.
 
