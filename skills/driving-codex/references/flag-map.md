@@ -28,8 +28,13 @@ passed with `-c key=value` or by calling `codex` directly.
 ## codex exec resume
 
 `codex exec resume [SESSION_ID] [PROMPT]` — UUID or thread name;
-`--last` for most recent; `--all` disables cwd filtering. Accepts the
-same config/model flags as exec.
+`--last` for most recent; `--all` disables cwd filtering.
+NARROWER flag set than exec (verified 0.143.0): accepts `-c`, `-m`,
+`-i`, `--output-schema`, `--json`, `-o`, `--ephemeral`,
+`--skip-git-repo-check` — but NOT `--sandbox` (use
+`-c sandbox_mode="<mode>"`), `--search`, `--oss`, `-C`, or
+`--add-dir`. The runner maps sandbox automatically and errors on the
+unsupported ones.
 
 ## codex review (native reviewer, prose output)
 

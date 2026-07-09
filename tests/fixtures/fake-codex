@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Emits canned JSONL matching `codex exec --json`; honors -o <file>.
+if [ -n "${FAKE_CODEX_ARGS_FILE:-}" ]; then printf '%s\n' "$@" > "$FAKE_CODEX_ARGS_FILE"; fi
 out=""
 prev=""
 for a in "$@"; do

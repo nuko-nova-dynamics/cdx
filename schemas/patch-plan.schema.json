@@ -8,14 +8,14 @@
         "properties": {
           "file": { "type": "string" },
           "change": { "type": "string", "description": "What to change, concretely" },
-          "rationale": { "type": "string" }
+          "rationale": { "type": ["string", "null"], "description": "Why, or null if self-evident" }
         },
-        "required": ["file", "change"],
+        "required": ["file", "change", "rationale"],
         "additionalProperties": false
       }
     },
-    "notes": { "type": "string" }
+    "notes": { "type": ["string", "null"], "description": "Cross-cutting notes, or null" }
   },
-  "required": ["steps"],
+  "required": ["steps", "notes"],
   "additionalProperties": false
 }

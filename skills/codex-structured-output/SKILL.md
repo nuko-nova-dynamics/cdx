@@ -20,12 +20,16 @@ be JSON matching the given JSON Schema. The runner exposes it as
 
 ## Ad-hoc schemas
 
-Write to the session scratchpad, then pass its path. Rules that make
-Codex fill schemas reliably:
+Write to the session scratchpad, then pass its path. The backend
+enforces OpenAI STRICT mode — violating these rules 400s the whole run
+(`invalid_json_schema`):
 
+- `required` MUST list EVERY key in `properties`, at every object
+  level. There are no optional fields; express optionality with
+  nullable types (`"type": ["string", "null"]`) or "empty array if
+  none" descriptions.
+- `additionalProperties: false` at every object level.
 - Keep it FLAT — one level of nesting max (arrays of flat objects OK).
-- Minimal `required`; optional fields get filled opportunistically.
-- `additionalProperties: false` at every level.
 - Use `enum` for anything categorical.
 - Describe fields with `description` — Codex reads them.
 

@@ -89,20 +89,35 @@ const lastMsgPath = path.join(scratch, "last-message.txt");
 const eventsPath = path.join(scratch, "events.jsonl");
 const stderrPath = path.join(scratch, "stderr.log");
 
+// `codex exec resume` accepts a narrower flag set than `codex exec`
+// (verified 0.143.0): no --sandbox/--search/--oss/-C/--add-dir. Sandbox
+// maps to the sandbox_mode config key; the rest are hard errors on resume.
 const argv = ["exec"];
-if (opts.resume) argv.push("resume", opts.resume === "last" ? "--last" : opts.resume);
-argv.push("--json", "-o", lastMsgPath, "--sandbox", sandbox);
+if (opts.resume) {
+  for (const [flag, set] of [
+    ["--search", opts.search],
+    ["--local", opts.local],
+    ["--cd", opts.cd],
+    ["--add-dir", opts.addDirs.length > 0],
+  ]) {
+    if (set) die(`${flag} is not supported on resume (codex exec resume has no such flag)`);
+  }
+  argv.push("resume", opts.resume === "last" ? "--last" : opts.resume);
+  argv.push("--json", "-o", lastMsgPath, "-c", `sandbox_mode="${sandbox}"`);
+} else {
+  argv.push("--json", "-o", lastMsgPath, "--sandbox", sandbox);
+  if (opts.search) argv.push("--search");
+  if (opts.local) {
+    argv.push("--oss");
+    if (opts.localProvider) argv.push("--local-provider", opts.localProvider);
+  }
+  for (const d of opts.addDirs) argv.push("--add-dir", d);
+  if (opts.cd) argv.push("-C", opts.cd);
+}
 if (opts.model) argv.push("-m", MODEL_ALIASES[opts.model] ?? opts.model);
 if (opts.effort) argv.push("-c", `model_reasoning_effort="${opts.effort}"`);
-if (opts.search) argv.push("--search");
 if (opts.schema) argv.push("--output-schema", opts.schema);
-if (opts.local) {
-  argv.push("--oss");
-  if (opts.localProvider) argv.push("--local-provider", opts.localProvider);
-}
 for (const img of opts.images) argv.push("-i", img);
-for (const d of opts.addDirs) argv.push("--add-dir", d);
-if (opts.cd) argv.push("-C", opts.cd);
 for (const c of opts.overrides) argv.push("-c", c);
 if (opts.ephemeral) argv.push("--ephemeral");
 if (prompt) argv.push(prompt);

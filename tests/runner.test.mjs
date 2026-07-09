@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 const RUNNER = new URL("../scripts/codex-run.mjs", import.meta.url).pathname;
 const FAKE = new URL("./fixtures/fake-codex", import.meta.url).pathname;
@@ -40,4 +43,23 @@ test("missing prompt without --resume is a usage error", () => {
   const r = run(["--sandbox", "ro"]);
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /prompt/i);
+});
+
+test("resume builds the narrower exec-resume argv (no --sandbox; -c sandbox_mode instead)", () => {
+  const argsFile = path.join(tmpdir(), `cdx-test-args-${process.pid}.txt`);
+  const r = run(["--sandbox", "ro", "--resume", "abc-123", "--", "continue"], {
+    FAKE_CODEX_ARGS_FILE: argsFile,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const args = readFileSync(argsFile, "utf8").trim().split("\n");
+  assert.deepEqual(args.slice(0, 2), ["exec", "resume"]);
+  assert.ok(args.includes("abc-123"), "session id passed");
+  assert.ok(!args.includes("--sandbox"), "--sandbox must not be passed to exec resume");
+  assert.ok(args.includes('sandbox_mode="read-only"'), "sandbox mapped via -c sandbox_mode");
+});
+
+test("resume rejects flags exec-resume does not support", () => {
+  const r = run(["--sandbox", "ro", "--resume", "abc-123", "--search", "--", "go"]);
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /--search.*not supported.*resume/i);
 });

@@ -4,8 +4,8 @@
     "claim": { "type": "string" },
     "verdict": { "type": "string", "enum": ["confirmed", "refuted", "uncertain"] },
     "evidence": { "type": "string", "description": "File paths, line numbers, command output supporting the verdict" },
-    "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+    "confidence": { "type": ["number", "null"], "description": "0-1, or null if not assessable" }
   },
-  "required": ["claim", "verdict", "evidence"],
+  "required": ["claim", "verdict", "evidence", "confidence"],
   "additionalProperties": false
 }
