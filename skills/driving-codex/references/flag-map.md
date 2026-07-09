@@ -1,4 +1,4 @@
-# Codex CLI flag map — verified against codex-cli 0.143.0 (2026-07-09)
+# Codex CLI flag map — verified against codex-cli 0.144.0 (2026-07-09)
 
 Runner flags map to these. Anything not wrapped by the runner can be
 passed with `-c key=value` or by calling `codex` directly.
@@ -12,7 +12,7 @@ passed with `-c key=value` or by calling `codex` directly.
 | `-s, --sandbox <read-only\|workspace-write\|danger-full-access>` | runner: ro/write/full |
 | `-m, --model <model>` | runner `--model`; alias spark→gpt-5.3-codex-spark |
 | `-c model_reasoning_effort="<none\|minimal\|low\|medium\|high\|xhigh>"` | runner `--effort` |
-| `--search` | native web_search tool, no per-call approval |
+| `-c web_search="<disabled\|cached\|indexed\|live>"` | runner `--search` → `live`. The `--search` FLAG was REMOVED from exec in 0.144.0 (still exists on the interactive TUI); default mode is `cached` (OpenAI-maintained index, no external access) |
 | `-i, --image <file>...` | attach images |
 | `--output-schema <file>` | JSON Schema for final response |
 | `--oss` / `--local-provider <lmstudio\|ollama>` | runner `--local` |
@@ -29,12 +29,12 @@ passed with `-c key=value` or by calling `codex` directly.
 
 `codex exec resume [SESSION_ID] [PROMPT]` — UUID or thread name;
 `--last` for most recent; `--all` disables cwd filtering.
-NARROWER flag set than exec (verified 0.143.0): accepts `-c`, `-m`,
-`-i`, `--output-schema`, `--json`, `-o`, `--ephemeral`,
+NARROWER flag set than exec (verified 0.143.0/0.144.0): accepts `-c`,
+`-m`, `-i`, `--output-schema`, `--json`, `-o`, `--ephemeral`,
 `--skip-git-repo-check` — but NOT `--sandbox` (use
-`-c sandbox_mode="<mode>"`), `--search`, `--oss`, `-C`, or
-`--add-dir`. The runner maps sandbox automatically and errors on the
-unsupported ones.
+`-c sandbox_mode="<mode>"`), `--oss`, `-C`, or `--add-dir`. The runner
+maps sandbox and web search to config keys automatically (so `--search`
+works on resume) and errors on the unsupported ones.
 
 ## codex review (native reviewer, prose output)
 

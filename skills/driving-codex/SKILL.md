@@ -41,7 +41,9 @@ output when it finishes. Short probes (< ~1 min) can run foreground.
   hard ("really dig", "think hard", gnarly bug). `low`/`minimal` for
   mechanical bulk edits.
 - **--search**: add when the task needs current external knowledge —
-  library versions, API docs, error messages worth googling.
+  library versions, API docs, error messages worth googling. (Maps to
+  `web_search="live"`; without it Codex defaults to `cached` — an
+  OpenAI-maintained index with no live external access.)
 - **--image <file>**: attach screenshots/mocks when they exist.
 - **--schema <path>**: add whenever you will ACT on the result rather
   than just read it. Bundled schemas (see codex-structured-output

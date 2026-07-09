@@ -9,7 +9,7 @@ acts on it — verifies findings against the repo, applies and tests patches,
 resumes threads. A real two-model loop, replacing the official openai-codex
 plugin's locked-down verbatim forwarder.
 
-Verified against **codex-cli 0.143.0**. Requires Node >= 20 and a logged-in
+Verified against **codex-cli 0.144.0**. Requires Node >= 20 and a logged-in
 Codex CLI (`codex login`).
 
 ## Install

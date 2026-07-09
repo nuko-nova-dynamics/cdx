@@ -59,7 +59,28 @@ test("resume builds the narrower exec-resume argv (no --sandbox; -c sandbox_mode
 });
 
 test("resume rejects flags exec-resume does not support", () => {
-  const r = run(["--sandbox", "ro", "--resume", "abc-123", "--search", "--", "go"]);
+  const r = run(["--sandbox", "ro", "--resume", "abc-123", "--local", "--", "go"]);
   assert.notEqual(r.status, 0);
-  assert.match(r.stderr, /--search.*not supported.*resume/i);
+  assert.match(r.stderr, /--local.*not supported.*resume/i);
+});
+
+test("--search maps to the web_search config key, never a --search flag (removed in codex 0.144.0)", () => {
+  const argsFile = path.join(tmpdir(), `cdx-test-search-args-${process.pid}.txt`);
+  const r = run(["--sandbox", "ro", "--search", "--", "look this up"], {
+    FAKE_CODEX_ARGS_FILE: argsFile,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const args = readFileSync(argsFile, "utf8").trim().split("\n");
+  assert.ok(!args.includes("--search"), "--search flag must not reach codex");
+  assert.ok(args.includes('web_search="live"'), "search mapped via -c web_search");
+});
+
+test("--search works on resume too (config key is resume-safe)", () => {
+  const argsFile = path.join(tmpdir(), `cdx-test-search-resume-args-${process.pid}.txt`);
+  const r = run(["--sandbox", "ro", "--resume", "abc-123", "--search", "--", "go"], {
+    FAKE_CODEX_ARGS_FILE: argsFile,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const args = readFileSync(argsFile, "utf8").trim().split("\n");
+  assert.ok(args.includes('web_search="live"'), "search mapped via -c web_search on resume");
 });

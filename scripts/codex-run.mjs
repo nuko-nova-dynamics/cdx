@@ -90,12 +90,14 @@ const eventsPath = path.join(scratch, "events.jsonl");
 const stderrPath = path.join(scratch, "stderr.log");
 
 // `codex exec resume` accepts a narrower flag set than `codex exec`
-// (verified 0.143.0): no --sandbox/--search/--oss/-C/--add-dir. Sandbox
+// (verified 0.143.0/0.144.0): no --sandbox/--oss/-C/--add-dir. Sandbox
 // maps to the sandbox_mode config key; the rest are hard errors on resume.
+// --search: the exec flag was removed in codex 0.144.0; the top-level
+// web_search config key (disabled|cached|indexed|live) replaces it and
+// works on both exec and resume.
 const argv = ["exec"];
 if (opts.resume) {
   for (const [flag, set] of [
-    ["--search", opts.search],
     ["--local", opts.local],
     ["--cd", opts.cd],
     ["--add-dir", opts.addDirs.length > 0],
@@ -106,7 +108,6 @@ if (opts.resume) {
   argv.push("--json", "-o", lastMsgPath, "-c", `sandbox_mode="${sandbox}"`);
 } else {
   argv.push("--json", "-o", lastMsgPath, "--sandbox", sandbox);
-  if (opts.search) argv.push("--search");
   if (opts.local) {
     argv.push("--oss");
     if (opts.localProvider) argv.push("--local-provider", opts.localProvider);
@@ -114,6 +115,7 @@ if (opts.resume) {
   for (const d of opts.addDirs) argv.push("--add-dir", d);
   if (opts.cd) argv.push("-C", opts.cd);
 }
+if (opts.search) argv.push("-c", `web_search="live"`);
 if (opts.model) argv.push("-m", MODEL_ALIASES[opts.model] ?? opts.model);
 if (opts.effort) argv.push("-c", `model_reasoning_effort="${opts.effort}"`);
 if (opts.schema) argv.push("--output-schema", opts.schema);
