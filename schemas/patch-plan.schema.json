@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "properties": {
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string" },
+          "change": { "type": "string", "description": "What to change, concretely" },
+          "rationale": { "type": "string" }
+        },
+        "required": ["file", "change"],
+        "additionalProperties": false
+      }
+    },
+    "notes": { "type": "string" }
+  },
+  "required": ["steps"],
+  "additionalProperties": false
+}

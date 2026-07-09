@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "properties": {
+    "overall": { "type": "string", "description": "One-paragraph overall assessment of the change" },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string" },
+          "line": { "type": "integer" },
+          "severity": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
+          "summary": { "type": "string", "description": "One-sentence statement of the defect" },
+          "failure_scenario": { "type": "string", "description": "Concrete inputs/state that produce wrong output or a crash" }
+        },
+        "required": ["file", "severity", "summary", "failure_scenario"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["overall", "findings"],
+  "additionalProperties": false
+}
