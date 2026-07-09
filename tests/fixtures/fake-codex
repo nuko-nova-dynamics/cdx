@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Emits canned JSONL matching `codex exec --json`; honors -o <file>.
+out=""
+prev=""
+for a in "$@"; do
+  if [ "$prev" = "-o" ]; then out="$a"; fi
+  prev="$a"
+done
+if [ "${FAKE_CODEX_MODE:-ok}" = "fail" ]; then
+  echo '{"type":"thread.started","thread_id":"fake-thread-fail"}'
+  echo '{"type":"turn.started"}'
+  echo '{"type":"turn.failed","error":{"message":"boom: model exploded"}}'
+  exit 1
+fi
+echo '{"type":"thread.started","thread_id":"fake-thread-123"}'
+echo '{"type":"turn.started"}'
+echo '{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"ls"}}'
+echo 'not json garbage line'
+echo '{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"fake done"}}'
+echo '{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":2,"output_tokens":5,"reasoning_output_tokens":3}}'
+if [ -n "$out" ]; then printf 'fake done' > "$out"; fi
+exit 0
