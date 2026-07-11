@@ -66,6 +66,22 @@ commands inside Codex sandbox), `codex mcp-server` (Codex as MCP).
 `turn.completed{usage{input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens}}`
 · `turn.failed{error{message}}` · top-level `error{message}`.
 
+## stdin footgun (why the runner exists)
+
+`codex exec` reads piped stdin until EOF even when a prompt argument is
+given ("stdin is appended as a `<stdin>` block"). Claude Code's
+background Bash keeps the stdin pipe open forever → codex hangs at
+"Reading additional input from stdin..." with zero CPU. The runner is
+immune (spawns with stdin ignored). Raw `codex exec` in background
+Bash MUST append `< /dev/null`.
+
+## Known sandbox noise
+
+Under `workspace-write`, fnm's shell init fails to create its
+multishell symlink (`~/.local/state/fnm_multishells ... Operation not
+permitted`) in codex-spawned shells. Non-fatal — node still resolves
+via inherited PATH. Ignore it.
+
 ## Danger flags — NEVER USE
 
 `--dangerously-bypass-approvals-and-sandbox`,
