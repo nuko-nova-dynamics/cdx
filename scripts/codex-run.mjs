@@ -2,7 +2,7 @@
 // cdx runner: composes `codex exec`, tees the --json JSONL event stream to a
 // scratch file, and prints a compact context-safe summary.
 // Contract: exit 0 only when a turn.completed event was seen and codex exited 0.
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, createWriteStream, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -115,6 +115,16 @@ if (opts.resume) {
   for (const d of opts.addDirs) argv.push("--add-dir", d);
   if (opts.cd) argv.push("-C", opts.cd);
 }
+// Codex refuses to run outside a git repo ("Not inside a trusted
+// directory") unless --skip-git-repo-check is passed. The explicit
+// --sandbox requirement is the real safety control here, so add the
+// flag automatically when the effective working root isn't a repo.
+const workRoot = opts.cd ?? process.cwd();
+const gitCheck = spawnSync("git", ["-C", workRoot, "rev-parse", "--is-inside-work-tree"], {
+  stdio: "ignore",
+});
+if (gitCheck.status !== 0) argv.push("--skip-git-repo-check");
+
 if (opts.search) argv.push("-c", `web_search="live"`);
 if (opts.model) argv.push("-m", MODEL_ALIASES[opts.model] ?? opts.model);
 if (opts.effort) argv.push("-c", `model_reasoning_effort="${opts.effort}"`);

@@ -1,6 +1,6 @@
 {
   "name": "cdx",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Full-surface Codex CLI integration: delegate, review, fan out, resume, and act on structured Codex results. Claude drives codex directly — no middleman runtime.",
   "author": {
     "name": "Nuko Nova Dynamics",

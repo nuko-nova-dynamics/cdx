@@ -75,6 +75,37 @@ test("--search maps to the web_search config key, never a --search flag (removed
   assert.ok(args.includes('web_search="live"'), "search mapped via -c web_search");
 });
 
+test("non-git working dir auto-adds --skip-git-repo-check", () => {
+  const argsFile = path.join(tmpdir(), `cdx-test-nogit-args-${process.pid}.txt`);
+  const r = spawnSync("node", [RUNNER, "--sandbox", "ro", "--", "audit this"], {
+    env: { ...process.env, CDX_CODEX_BIN: FAKE, FAKE_CODEX_ARGS_FILE: argsFile },
+    cwd: tmpdir(),
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const args = readFileSync(argsFile, "utf8").trim().split("\n");
+  assert.ok(args.includes("--skip-git-repo-check"), "flag auto-added outside a git repo");
+});
+
+test("git working dir does not add --skip-git-repo-check", () => {
+  const argsFile = path.join(tmpdir(), `cdx-test-git-args-${process.pid}.txt`);
+  const r = run(["--sandbox", "ro", "--", "hello"], { FAKE_CODEX_ARGS_FILE: argsFile });
+  assert.equal(r.status, 0, r.stderr);
+  const args = readFileSync(argsFile, "utf8").trim().split("\n");
+  assert.ok(!args.includes("--skip-git-repo-check"), "flag absent inside a git repo");
+});
+
+test("--cd target decides the git check, not the process cwd", () => {
+  const argsFile = path.join(tmpdir(), `cdx-test-cd-args-${process.pid}.txt`);
+  const r = spawnSync("node", [RUNNER, "--sandbox", "ro", "--cd", tmpdir(), "--", "go"], {
+    env: { ...process.env, CDX_CODEX_BIN: FAKE, FAKE_CODEX_ARGS_FILE: argsFile },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const args = readFileSync(argsFile, "utf8").trim().split("\n");
+  assert.ok(args.includes("--skip-git-repo-check"), "flag added when --cd target is not a repo");
+});
+
 test("--search works on resume too (config key is resume-safe)", () => {
   const argsFile = path.join(tmpdir(), `cdx-test-search-resume-args-${process.pid}.txt`);
   const r = run(["--sandbox", "ro", "--resume", "abc-123", "--search", "--", "go"], {

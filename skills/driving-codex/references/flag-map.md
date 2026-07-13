@@ -19,7 +19,7 @@ passed with `-c key=value` or by calling `codex` directly.
 | `-C, --cd <dir>` | working root |
 | `--add-dir <dir>` | extra writable roots |
 | `--ephemeral` | no session persistence |
-| `--skip-git-repo-check` | allow outside a git repo |
+| `--skip-git-repo-check` | allow outside a git repo — the RUNNER ADDS THIS AUTOMATICALLY when the effective working root (`--cd` target or cwd) is not a git repo; without it codex dies with "Not inside a trusted directory" |
 | `-p, --profile <name>` | layer $CODEX_HOME/<name>.config.toml |
 | `--enable <feature>` / `--disable <feature>` | feature flags (`codex features list`) |
 | `--ignore-user-config` / `--ignore-rules` / `--strict-config` | config hygiene |
