@@ -16,7 +16,7 @@ const LOCAL_PROVIDERS = new Set(["lmstudio", "ollama"]);
 function die(msg) {
   process.stderr.write(`codex-run: ${msg}\n`);
   process.stderr.write(
-    "usage: codex-run.mjs --sandbox <ro|write|full> [--model <m|spark>] [--effort <e>] [--search] " +
+    "usage: codex-run.mjs --sandbox <ro|write|full> [--model <m|spark>] [--effort <e>] [--fast] [--search] " +
       "[--image <f>]... [--schema <path>] [--resume <id|last>] [--local [lmstudio|ollama]] " +
       "[--add-dir <d>]... [--cd <dir>] [-c k=v]... [--ephemeral] [--scratch <dir>] -- <prompt...>\n"
   );
@@ -46,6 +46,8 @@ function parseArgs(argv) {
       o.effort = next(a);
     } else if (a === "--search") {
       o.search = true;
+    } else if (a === "--fast") {
+      o.fast = true;
     } else if (a === "--image") {
       o.images.push(next(a));
     } else if (a === "--schema") {
@@ -126,6 +128,9 @@ const gitCheck = spawnSync("git", ["-C", workRoot, "rev-parse", "--is-inside-wor
 if (gitCheck.status !== 0) argv.push("--skip-git-repo-check");
 
 if (opts.search) argv.push("-c", `web_search="live"`);
+// Codex "Fast" service tier: 1.5x speed, increased usage burn. Config
+// key service_tier="fast" maps to the request tier "priority".
+if (opts.fast) argv.push("-c", `service_tier="fast"`);
 if (opts.model) argv.push("-m", MODEL_ALIASES[opts.model] ?? opts.model);
 if (opts.effort) argv.push("-c", `model_reasoning_effort="${opts.effort}"`);
 if (opts.schema) argv.push("--output-schema", opts.schema);

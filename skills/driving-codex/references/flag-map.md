@@ -12,6 +12,7 @@ passed with `-c key=value` or by calling `codex` directly.
 | `-s, --sandbox <read-only\|workspace-write\|danger-full-access>` | runner: ro/write/full |
 | `-m, --model <model>` | runner `--model`; alias spark→gpt-5.3-codex-spark |
 | `-c model_reasoning_effort="<none\|minimal\|low\|medium\|high\|xhigh>"` | runner `--effort` |
+| `-c service_tier="fast"` | runner `--fast` — Codex "Fast" tier (id `priority`): 1.5x speed, increased usage; available on all models incl. gpt-5.6-sol; also `"flex"` exists |
 | `-c web_search="<disabled\|cached\|indexed\|live>"` | runner `--search` → `live`. The `--search` FLAG was REMOVED from exec in 0.144.0 (still exists on the interactive TUI); default mode is `cached` (OpenAI-maintained index, no external access) |
 | `-i, --image <file>...` | attach images |
 | `--output-schema <file>` | JSON Schema for final response |

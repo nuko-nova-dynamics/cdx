@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.3 — 2026-07-15
+
+New `--fast` runner flag: Codex "Fast" service tier (`service_tier=
+"fast"`, request tier `priority`) — same model at 1.5x speed for
+increased usage. Verified against the official config reference and a
+live run on gpt-5.6-sol.
+
 ## 0.1.2 — 2026-07-13
 
 Runner auto-adds `--skip-git-repo-check` when the effective working

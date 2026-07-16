@@ -106,6 +106,16 @@ test("--cd target decides the git check, not the process cwd", () => {
   assert.ok(args.includes("--skip-git-repo-check"), "flag added when --cd target is not a repo");
 });
 
+test("--fast maps to service_tier config key (works on exec and resume)", () => {
+  const argsFile = path.join(tmpdir(), `cdx-test-fast-args-${process.pid}.txt`);
+  const r = run(["--sandbox", "ro", "--fast", "--", "quick job"], {
+    FAKE_CODEX_ARGS_FILE: argsFile,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const args = readFileSync(argsFile, "utf8").trim().split("\n");
+  assert.ok(args.includes('service_tier="fast"'), "fast tier mapped via -c service_tier");
+});
+
 test("--search works on resume too (config key is resume-safe)", () => {
   const argsFile = path.join(tmpdir(), `cdx-test-search-resume-args-${process.pid}.txt`);
   const r = run(["--sandbox", "ro", "--resume", "abc-123", "--search", "--", "go"], {

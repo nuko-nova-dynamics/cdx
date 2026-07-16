@@ -40,6 +40,11 @@ output when it finishes. Short probes (< ~1 min) can run foreground.
 - **--effort**: leave unset by default. `xhigh` when the user signals
   hard ("really dig", "think hard", gnarly bug). `low`/`minimal` for
   mechanical bulk edits.
+- **--fast**: Codex's "Fast" service tier — same model at 1.5x speed
+  for increased usage burn (maps to `service_tier="fast"`). Use when
+  the user says fast/quick/asap but the task still needs the big
+  model; for genuinely simple jobs prefer `--model spark` instead
+  (a smaller model, cheaper than burning fast-tier quota).
 - **--search**: add when the task needs current external knowledge —
   library versions, API docs, error messages worth googling. (Maps to
   `web_search="live"`; without it Codex defaults to `cached` — an
