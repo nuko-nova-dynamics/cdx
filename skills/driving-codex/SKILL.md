@@ -45,6 +45,10 @@ output when it finishes. Short probes (< ~1 min) can run foreground.
   the user says fast/quick/asap but the task still needs the big
   model; for genuinely simple jobs prefer `--model spark` instead
   (a smaller model, cheaper than burning fast-tier quota).
+  IMPORTANT: the tier is ORTHOGONAL to reasoning — it is serving
+  speed, not a quality trade. `--fast --effort xhigh` is valid and
+  often optimal for urgent-but-hard work: deepest reasoning,
+  delivered 1.5x faster. Never frame fast-vs-correct as a tradeoff.
 - **--search**: add when the task needs current external knowledge —
   library versions, API docs, error messages worth googling. (Maps to
   `web_search="live"`; without it Codex defaults to `cached` — an

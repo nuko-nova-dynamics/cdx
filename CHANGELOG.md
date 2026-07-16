@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.4 — 2026-07-16
+
+driving-codex: clarify that the Fast service tier is orthogonal to
+reasoning effort (serving speed, not a quality trade) — --fast
+--effort xhigh is valid and often optimal for urgent hard work.
+
+
 ## 0.1.3 — 2026-07-15
 
 New `--fast` runner flag: Codex "Fast" service tier (`service_tier=
