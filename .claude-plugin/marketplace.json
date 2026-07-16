@@ -13,12 +13,7 @@
       "description": "Full-surface Codex CLI integration: delegate, review, fan out, resume, and act on structured Codex results.",
       "license": "Apache-2.0",
       "category": "agent-tooling",
-      "tags": [
-        "codex",
-        "delegation",
-        "review",
-        "multi-model"
-      ]
+      "tags": ["codex", "delegation", "review", "multi-model"]
     }
   ]
 }
