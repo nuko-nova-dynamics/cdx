@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -124,4 +124,139 @@ test("--search works on resume too (config key is resume-safe)", () => {
   assert.equal(r.status, 0, r.stderr);
   const args = readFileSync(argsFile, "utf8").trim().split("\n");
   assert.ok(args.includes('web_search="live"'), "search mapped via -c web_search on resume");
+});
+
+function isolatedRun(t, args, extraEnv = {}) {
+  const scratch = mkdtempSync(path.join(tmpdir(), "cdx-regression-"));
+  t.after(() => rmSync(scratch, { recursive: true, force: true }));
+  const argsFile = path.join(scratch, "argv.txt");
+  const r = run(["--scratch", scratch, ...args], { FAKE_CODEX_ARGS_FILE: argsFile, ...extraEnv });
+  return { ...r, scratch, args: r.status === 0 ? readFileSync(argsFile, "utf8").trim().split("\n") : [] };
+}
+
+test("help works without a sandbox, prompt, or installed Codex", () => {
+  const r = run(["--help"], { CDX_CODEX_BIN: "/nonexistent/codex" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /max.*ultra/);
+  assert.match(r.stdout, /--fork/);
+});
+
+test("model and effort remain inherited unless explicitly requested", (t) => {
+  const r = isolatedRun(t, ["--sandbox", "ro", "--", "hello"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(!r.args.includes("-m"));
+  assert.ok(!r.args.some((a) => a.startsWith("model_reasoning_effort=")));
+  assert.ok(!r.args.includes("--approve-for-me"));
+});
+
+for (const effort of ["max", "ultra"]) {
+  for (const mode of [[], ["--resume", "abc-123"], ["--fork", "abc-123"]]) {
+    test(`${effort} and explicit Astra survive ${mode[0] || "fresh"} invocation`, (t) => {
+      const r = isolatedRun(t, ["--sandbox", "ro", ...mode, "--model", "gpt-6-astra", "--effort", effort, "--fast", "--", "check"]);
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.args[r.args.indexOf("-m") + 1], "gpt-6-astra");
+      assert.ok(r.args.includes(`model_reasoning_effort="${effort}"`));
+      assert.ok(r.args.includes('service_tier="fast"'));
+    });
+  }
+}
+
+test("fork creates a noninteractive branch with sandbox and schema preserved", (t) => {
+  const r = isolatedRun(t, ["--sandbox", "ro", "--fork", "abc-123", "--schema", "schemas/verdict.schema.json", "--", "check"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(r.args.slice(0, 3), ["exec", "fork", "abc-123"]);
+  assert.ok(r.args.includes('sandbox_mode="read-only"'));
+  assert.ok(!r.args.includes("--sandbox"));
+  assert.equal(r.args[r.args.indexOf("--output-schema") + 1], path.resolve("schemas/verdict.schema.json"));
+});
+
+test("conflicting session operations and unsupported continuation options fail before spawn", () => {
+  for (const args of [
+    ["--resume", "abc", "--fork", "def"],
+    ["--fork", "abc", "--cd", tmpdir()],
+    ["--fork", "abc", "--local"],
+    ["--fork", "abc", "--add-dir", tmpdir()],
+  ]) {
+    const r = run(["--sandbox", "ro", ...args, "--", "hello"]);
+    assert.equal(r.status, 2, r.stderr);
+  }
+});
+
+test("fork without a prompt reports creation without requiring a completed turn", (t) => {
+  const r = isolatedRun(t, ["--sandbox", "ro", "--fork", "abc-123"], { FAKE_CODEX_MODE: "fork-only" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /status: forked/);
+  assert.ok(!r.args.includes("-o"));
+  assert.doesNotMatch(r.stdout, /status: completed/);
+  for (const extra of [["--schema", "schema.json"], ["--image", "mock.png"], ["--ephemeral"]]) {
+    const rejected = run(["--sandbox", "ro", "--fork", "abc-123", ...extra]);
+    assert.equal(rejected.status, 2);
+    assert.match(rejected.stderr, /requires a prompt/);
+  }
+});
+
+test("automatic review is explicit and restricted to fresh workspace-write runs", (t) => {
+  const r = isolatedRun(t, ["--sandbox", "write", "--approve-for-me", "--", "fix"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(r.args.includes("--approve-for-me"));
+  assert.equal(r.args[r.args.indexOf("--sandbox") + 1], "workspace-write");
+  for (const args of [
+    ["--sandbox", "ro"], ["--sandbox", "full"],
+    ["--sandbox", "write", "--resume", "abc"],
+    ["--sandbox", "write", "--fork", "abc"],
+  ]) {
+    const rejected = run([...args, "--approve-for-me", "--", "fix"]);
+    assert.equal(rejected.status, 2);
+    assert.match(rejected.stderr, /requires a fresh --sandbox write/);
+  }
+});
+
+test("option-looking prompts stay literal and attachment paths survive --cd", (t) => {
+  const r = isolatedRun(t, ["--sandbox", "ro", "--cd", tmpdir(), "--image", "mock.png", "--", "--help"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(r.args.slice(-2), ["--", "--help"]);
+  assert.equal(r.args[r.args.indexOf("-i") + 1], path.resolve("mock.png"));
+});
+
+test("stderr-only CLI failures expose the actual cause", (t) => {
+  const r = isolatedRun(t, ["--sandbox", "ro", "--", "hello"], { FAKE_CODEX_MODE: "stderr-only" });
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /unsupported model for this account/);
+});
+
+test("a reused scratch directory cannot report an old answer", (t) => {
+  const scratch = mkdtempSync(path.join(tmpdir(), "cdx-stale-"));
+  t.after(() => rmSync(scratch, { recursive: true, force: true }));
+  writeFileSync(path.join(scratch, "last-message.txt"), "stale answer");
+  const r = run(["--scratch", scratch, "--sandbox", "ro", "--", "hello"], { FAKE_CODEX_MODE: "empty-success" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /\(no final message\)/);
+  assert.doesNotMatch(r.stdout, /stale answer/);
+});
+
+test("a later failed turn cannot reuse an earlier completion status", (t) => {
+  const r = isolatedRun(t, ["--sandbox", "ro", "--", "hello"], { FAKE_CODEX_MODE: "failed-after-completed" });
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /later turn failed/);
+});
+
+test("large event and stderr artifacts are complete when the runner exits", (t) => {
+  const r = isolatedRun(t, ["--sandbox", "ro", "--", "hello"], { FAKE_CODEX_MODE: "large" });
+  assert.equal(r.status, 0, r.stderr);
+  const events = readFileSync(path.join(r.scratch, "events.jsonl"), "utf8").trim().split("\n");
+  assert.equal(JSON.parse(events.at(-1)).type, "turn.completed");
+  assert.equal(events.length, 106);
+  const stderr = readFileSync(path.join(r.scratch, "stderr.log"), "utf8");
+  assert.equal(stderr.length, 100 * 16385 + "stderr complete\n".length);
+  assert.ok(stderr.endsWith("stderr complete\n"));
+});
+
+test("unwritable artifact destinations fail without an unhandled stream error", (t) => {
+  const scratch = mkdtempSync(path.join(tmpdir(), "cdx-artifact-error-"));
+  t.after(() => rmSync(scratch, { recursive: true, force: true }));
+  mkdirSync(path.join(scratch, "events.jsonl"));
+  const r = run(["--scratch", scratch, "--sandbox", "ro", "--", "hello"]);
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stdout, /Could not write artifacts/);
+  assert.doesNotMatch(r.stderr, /Unhandled/);
 });

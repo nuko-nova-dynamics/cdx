@@ -1,23 +1,44 @@
-#!/usr/bin/env bash
-# Emits canned JSONL matching `codex exec --json`; honors -o <file>.
-if [ -n "${FAKE_CODEX_ARGS_FILE:-}" ]; then printf '%s\n' "$@" > "$FAKE_CODEX_ARGS_FILE"; fi
-out=""
-prev=""
-for a in "$@"; do
-  if [ "$prev" = "-o" ]; then out="$a"; fi
-  prev="$a"
-done
-if [ "${FAKE_CODEX_MODE:-ok}" = "fail" ]; then
-  echo '{"type":"thread.started","thread_id":"fake-thread-fail"}'
-  echo '{"type":"turn.started"}'
-  echo '{"type":"turn.failed","error":{"message":"boom: model exploded"}}'
-  exit 1
-fi
-echo '{"type":"thread.started","thread_id":"fake-thread-123"}'
-echo '{"type":"turn.started"}'
-echo '{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"ls"}}'
-echo 'not json garbage line'
-echo '{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"fake done"}}'
-echo '{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":2,"output_tokens":5,"reasoning_output_tokens":3}}'
-if [ -n "$out" ]; then printf 'fake done' > "$out"; fi
-exit 0
+#!/usr/bin/env node
+// Emit deterministic CLI events without contacting a model.
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+if (process.env.FAKE_CODEX_ARGS_FILE) {
+  fs.writeFileSync(process.env.FAKE_CODEX_ARGS_FILE, args.join("\n") + "\n");
+}
+const outIndex = args.indexOf("-o");
+const out = outIndex < 0 ? null : args[outIndex + 1];
+const mode = process.env.FAKE_CODEX_MODE || "ok";
+const event = (value) => process.stdout.write(JSON.stringify(value) + "\n");
+
+if (mode === "fork-only") {
+  event({ type: "thread.started", thread_id: "fake-fork-456" });
+} else if (mode === "stderr-only") {
+  process.stderr.write("error: unsupported model for this account\n");
+  process.exitCode = 2;
+} else {
+  event({ type: "thread.started", thread_id: mode === "fail" ? "fake-thread-fail" : "fake-thread-123" });
+  event({ type: "turn.started" });
+  if (mode === "fail") {
+    event({ type: "turn.failed", error: { message: "boom: model exploded" } });
+    process.exitCode = 1;
+  } else {
+    event({ type: "item.completed", item: { id: "item_0", type: "command_execution", command: "ls" } });
+    process.stdout.write("not json garbage line\n");
+    if (mode === "large") {
+      for (let i = 0; i < 100; i++) {
+        event({ type: "item.completed", item: { id: `large_${i}`, type: "command_execution", output: "x".repeat(16384) } });
+        process.stderr.write("y".repeat(16384) + "\n");
+      }
+      process.stderr.write("stderr complete\n");
+    }
+    if (mode !== "empty-success") {
+      event({ type: "item.completed", item: { id: "item_1", type: "agent_message", text: "fake done" } });
+      if (out) fs.writeFileSync(out, "fake done");
+    }
+    event({ type: "turn.completed", usage: { input_tokens: 10, cached_input_tokens: 2, output_tokens: 5, reasoning_output_tokens: 3 } });
+    if (mode === "failed-after-completed") {
+      event({ type: "turn.started" });
+      event({ type: "turn.failed", error: { message: "later turn failed" } });
+    }
+  }
+}

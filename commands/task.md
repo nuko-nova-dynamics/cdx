@@ -1,16 +1,30 @@
 ---
-description: Delegate a task to Codex with full flag control (model, effort, sandbox, search, images, schema, resume)
-argument-hint: "[--bg|--wait] [--model m|spark] [--effort none|minimal|low|medium|high|xhigh] [--sandbox ro|write|full] [--search] [--image <f>] [--schema <name|file>] [--resume [id]|--fresh] [--local [lmstudio|ollama]] [-c k=v] <prompt>"
+description: Delegate a Codex task with model, effort, sandbox, search, schema, and session controls
+argument-hint: "[--bg|--wait] [--model m|spark] [--effort none|minimal|low|medium|high|xhigh|max|ultra] [--fast] [--sandbox ro|write|full] [--approve-for-me] [--search] [--image <f>] [--schema <name|file>] [--resume [id]|--fork <id>|--fresh] [--local [lmstudio|ollama]] [-c k=v] <prompt>"
 allowed-tools: Bash, Read, Grep, Glob
 ---
 
-Use the cdx:driving-codex skill. Delegate the following to Codex via the runner:
+Use the cdx:driving-codex skill. Delegate the following through the runner:
 
 $ARGUMENTS
 
-Rules:
-- `--bg`/`--wait` control Claude-side execution (background Bash vs foreground); strip them from the runner call. Default: background if the task looks > ~1 minute, else foreground.
-- `--schema <name>` where name is one of review-findings|verdict|task-report|patch-plan maps to `${CLAUDE_PLUGIN_ROOT}/schemas/<name>.schema.json`; a path is passed through.
-- `--resume` with no id means `--resume last`. `--fresh` means do not resume; strip it.
-- Any flag the user did not set: choose per the driving-codex heuristics. Do not ask.
-- After the run: parse/verify/act per driving-codex "Acting on results", then report outcome + session id.
+- `--bg` and `--wait` select background or foreground Bash execution;
+  strip them before invoking the runner. Default to background for
+  longer work and foreground for short probes.
+- Resolve schema names `review-findings`, `verdict`, `task-report`, and
+  `patch-plan` to `${CLAUDE_PLUGIN_ROOT}/schemas/<name>.schema.json`.
+  Pass an explicit schema path unchanged.
+- Map bare `--resume` to `--resume last` only when the intended session
+  is unambiguous. `--fork <id>` starts a separate continuation. These
+  modes are mutually exclusive; `--fresh` selects neither and is stripped.
+- Inherit model and effort unless overridden. Preserve exact requested
+  model names. The effort names above are the runner's accepted union;
+  select only levels supported by the actual model. Astra uses `low`
+  for lighter reasoning, not `none` or `minimal`.
+- Add `--approve-for-me` only on an explicit request for automatic
+  approval review, with fresh `--sandbox write`. It is unavailable on
+  resume and fork in this runner.
+- Choose other unspecified flags using the driving skill and the task's
+  authorization. Use `--help` for remaining runner options.
+- After completion, verify and act on the result within the user's
+  scope, then report the outcome and session id.

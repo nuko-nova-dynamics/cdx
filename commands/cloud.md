@@ -8,4 +8,9 @@ Use the cdx:driving-codex skill, Cloud section. Request:
 
 $ARGUMENTS
 
-Map directly to `codex cloud exec|list|status|diff|apply`. These commands are experimental upstream — surface their output faithfully, including errors. Before `apply`, show the diff (`codex cloud diff <id>`) and confirm with the user unless they already said to apply.
+Use `codex cloud exec|list|status|diff|apply`; inspect the installed
+subcommand's help for its arguments. Surface actual results and errors.
+Before `apply`, inspect the diff (`codex cloud diff <id>`) and the local
+working tree. Apply within existing authorization, then verify the result.
+If applying was not authorized, present the concrete diff for approval
+after completing the inspection.

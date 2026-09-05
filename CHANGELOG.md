@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.0 - 2026-09-05
+
+- Support the CLI's `max` and `ultra` reasoning levels while preserving inherited
+  model defaults. Refresh model selection and prompting for GPT-6 Astra.
+- Add noninteractive `--fork`, including fork creation without a new model turn,
+  and explicit `--approve-for-me` for fresh workspace-write runs.
+- Fix focused native-review instructions, distinguish sandbox from approval
+  policy, and replace universal Fast-mode claims with model-specific guidance.
+- Correct Structured Outputs nesting guidance and recover malformed reports
+  without automatically repeating write operations.
+- Preserve literal option-looking prompts and resolve schema/image paths before
+  changing the working root. Expose stderr-only errors, flush complete artifacts,
+  and prevent stale answers or completion states from masking failures.
+- Expand runner regression coverage and replace Spark-only live checks with
+  configurable model, schema, resume, fork, and concurrent-worker smoke coverage.
+- Add CI regression checks on Node 20, 22, and 24.
+
+CLI command surface checked against codex-cli 0.153.4.
+
 ## 0.1.4 — 2026-07-16
 
 driving-codex: clarify that the Fast service tier is orthogonal to

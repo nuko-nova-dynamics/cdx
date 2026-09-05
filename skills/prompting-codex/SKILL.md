@@ -1,50 +1,61 @@
 ---
 name: prompting-codex
-description: Compose effective prompts for Codex (GPT-5.x-Codex models) — task framing, output contracts, verification blocks. Use before any non-trivial Codex delegation to tighten the prompt.
+description: Compose task prompts for Codex delegation, including GPT-6 Astra, with clear scope, evidence, completion criteria, and output requirements. Use before non-trivial CLI delegation or when improving a failing Codex prompt.
 ---
 
 # Prompting Codex
 
-Prompt Codex like an operator, not a collaborator. Compact,
-block-structured prompts with XML tags: state the task, the output
-contract, the follow-through defaults, and only the extra constraints
-that matter.
+State the outcome, relevant context, and constraints that change how
+Codex should work. Use plain prose, bullets, or XML when they make the
+boundaries clearer; tags and a fixed collection of blocks are optional.
 
-Core rules:
-- One clear task per run. Split unrelated asks into separate runs.
-- Tell Codex what done looks like — it will not infer the end state.
-- Add explicit grounding/verification rules wherever unsupported
-  guesses would hurt.
-- Tighten the prompt contract before raising reasoning effort.
+## Compose the task
 
-Default recipe:
-- `<task>`: the concrete job plus relevant repo/failure context.
-- `<structured_output_contract>` or `<compact_output_contract>`:
-  exact shape and brevity requirements (omit when the runner passes
-  `--schema` — the schema IS the contract; still state field
-  intent in the task).
-- `<default_follow_through_policy>`: what to do instead of asking
-  routine questions.
-- `<verification_loop>` / `<completeness_contract>`: required for
-  debugging, implementation, risky fixes.
-- `<grounding_rules>` / `<citation_rules>`: required for review,
-  research, or claim-heavy output.
+- Give one coherent objective. A fix can include its tests and docs;
+  split work when the objectives are independent or need different
+  permissions, not merely because the task has several steps.
+- Include the repository root, observed failure or exact review target,
+  relevant source pointers, and what a completed result must do.
+- Specify output fields when they will be consumed. With runner
+  `--schema`, explain field intent without duplicating the schema.
+- Require evidence for uncertain claims and identify the checks that
+  would establish completion. Set effort only after the task is clear;
+  use a supported level from the driving skill's flag map.
 
-Add blocks by task type:
-- Coding/debugging: `completeness_contract`, `verification_loop`,
-  `missing_context_gating`.
-- Review: `grounding_rules`, `dig_deeper_nudge` (+ `--schema
-  review-findings`).
-- Research: `research_mode`, `citation_rules` (+ `--search`).
-- Write-capable runs: `action_safety` — stay narrow, no unrelated
-  refactors.
+## Autonomy and verification
 
-Resume follow-ups (`--resume <id>`): send only the delta instruction,
-not the restated prompt, unless direction changed materially.
+Preserve authorization already given in the conversation. Let Codex
+resolve routine choices and complete authorized work. If approval is
+still needed, prepare the concrete result first. User instructions take
+precedence over skill guidelines; an actual blocking requirement should
+be named and explained. Give parallel workers bounded independent work
+only when delegation is permitted. Ask for checks proportional to the
+change, with a stopping condition after relevant checks pass. Specify
+concise reporting and distinguish verified facts from inference.
 
-Reusable blocks: [references/prompt-blocks.md](references/prompt-blocks.md).
-End-to-end templates: [references/codex-prompt-recipes.md](references/codex-prompt-recipes.md).
-Failure modes: [references/codex-prompt-antipatterns.md](references/codex-prompt-antipatterns.md).
+These choices address the behaviors described in OpenAI's
+[Astra prompting guidance](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-6-astra#prompting-best-practices),
+reviewed on 2026-09-05. The recipes remain useful with other Codex models;
+they do not assume every model supports Astra's settings.
 
-Adapted from openai/codex-plugin-cc's gpt-5-4-prompting skill
-(Apache-2.0); see NOTICE.
+## Select only the needed detail
+
+- For coding or diagnosis, name the observed behavior, allowed edit
+  scope, and focused verification.
+- For review, specify the immutable target where possible and require
+  a concrete failure scenario for each finding.
+- For research, request inspected primary sources for current claims
+  and separate conclusions from unresolved questions.
+- For a write-capable run, include any relevant ownership boundaries
+  and external actions already authorized or explicitly deferred.
+
+Resume or fork follow-ups should usually contain the delta instruction.
+Restate scope only when it changed or the saved context could be ambiguous.
+
+Read [prompt blocks](references/prompt-blocks.md) for reusable constraints,
+[recipes](references/codex-prompt-recipes.md) for task examples, and
+[anti-patterns](references/codex-prompt-antipatterns.md) when a prompt is
+underperforming. Use the smallest example that fits.
+
+Originally adapted from openai/codex-plugin-cc's gpt-5-4-prompting skill
+(Apache-2.0); see NOTICE. Current guidance is maintained independently.
