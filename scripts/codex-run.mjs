@@ -1,25 +1,27 @@
 #!/usr/bin/env node
 // cdx runner: composes `codex exec`, tees the --json JSONL event stream to a
 // scratch file, and prints a compact context-safe summary.
-// Contract: exit 0 only when a turn.completed event was seen and codex exited 0.
+// Contract: exit 0 on a completed turn, or a verified fork without a new turn.
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, createWriteStream, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, createWriteStream, readFileSync, existsSync, writeFileSync } from "node:fs";
+import { finished } from "node:stream/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 
 const SANDBOX_MAP = { ro: "read-only", write: "workspace-write", full: "danger-full-access" };
 const MODEL_ALIASES = { spark: "gpt-5.3-codex-spark" };
-const EFFORTS = new Set(["none", "minimal", "low", "medium", "high", "xhigh"]);
+// This is the CLI's vocabulary. The selected model decides which levels it supports.
+const EFFORTS = new Set(["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]);
 const LOCAL_PROVIDERS = new Set(["lmstudio", "ollama"]);
 
+const USAGE = "usage: codex-run.mjs --sandbox <ro|write|full> [--model <m|spark>] [--effort <e>] [--fast] [--search] " +
+  "[--approve-for-me] [--image <f>]... [--schema <path>] [--resume <id|last> | --fork <id>] " +
+  "[--local [lmstudio|ollama]] [--add-dir <d>]... [--cd <dir>] [-c k=v]... " +
+  "[--ephemeral] [--scratch <dir>] -- <prompt...>\n";
+
 function die(msg) {
-  process.stderr.write(`codex-run: ${msg}\n`);
-  process.stderr.write(
-    "usage: codex-run.mjs --sandbox <ro|write|full> [--model <m|spark>] [--effort <e>] [--fast] [--search] " +
-      "[--image <f>]... [--schema <path>] [--resume <id|last>] [--local [lmstudio|ollama]] " +
-      "[--add-dir <d>]... [--cd <dir>] [-c k=v]... [--ephemeral] [--scratch <dir>] -- <prompt...>\n"
-  );
+  process.stderr.write(`codex-run: ${msg}\n${USAGE}`);
   process.exit(2);
 }
 
@@ -48,12 +50,18 @@ function parseArgs(argv) {
       o.search = true;
     } else if (a === "--fast") {
       o.fast = true;
+    } else if (a === "--approve-for-me") {
+      o.approveForMe = true;
     } else if (a === "--image") {
       o.images.push(next(a));
     } else if (a === "--schema") {
       o.schema = next(a);
     } else if (a === "--resume") {
       o.resume = next(a);
+    } else if (a === "--fork") {
+      o.fork = next(a);
+    } else if (a === "--help" || a === "-h") {
+      o.help = true;
     } else if (a === "--local") {
       o.local = true;
       if (i + 1 < argv.length && LOCAL_PROVIDERS.has(argv[i + 1])) o.localProvider = argv[++i];
@@ -78,38 +86,55 @@ function parseArgs(argv) {
 }
 
 const opts = parseArgs(process.argv.slice(2));
+if (opts.help) {
+  process.stdout.write(USAGE + `effort: ${[...EFFORTS].join(" | ")} (model-dependent)\n` +
+    "Model and effort inherit Codex settings when omitted. Automatic review requires a fresh --sandbox write run.\n");
+  process.exit(0);
+}
 if (!opts.sandbox) die("--sandbox is required (ro|write|full)");
 const sandbox = SANDBOX_MAP[opts.sandbox] ?? opts.sandbox;
 if (!Object.values(SANDBOX_MAP).includes(sandbox)) die(`invalid --sandbox: ${opts.sandbox}`);
 if (opts.effort && !EFFORTS.has(opts.effort)) die(`invalid --effort: ${opts.effort}`);
+if (opts.resume && opts.fork) die("--resume and --fork are mutually exclusive");
+const continuation = opts.resume ? "resume" : opts.fork ? "fork" : null;
+if (opts.approveForMe && (sandbox !== "workspace-write" || continuation)) {
+  die("--approve-for-me requires a fresh --sandbox write run");
+}
 const prompt = opts.promptParts.join(" ").trim();
-if (!prompt && !opts.resume) die("a prompt is required (or --resume <id|last>)");
+if (!prompt && !continuation) die("a prompt is required (or --resume <id|last> / --fork <id>)");
+const forkOnly = Boolean(opts.fork && !prompt);
+if (forkOnly && (opts.schema || opts.images.length || opts.ephemeral)) {
+  die("--fork requires a prompt when using --schema, --image, or --ephemeral");
+}
+
+if (continuation) {
+  for (const [flag, set] of [
+    ["--local", opts.local],
+    ["--cd", opts.cd],
+    ["--add-dir", opts.addDirs.length > 0],
+  ]) {
+    if (set) die(`${flag} is not supported on ${continuation} (codex exec ${continuation} has no such flag)`);
+  }
+}
 
 const scratch = opts.scratch ?? mkdtempSync(path.join(tmpdir(), "cdx-"));
 mkdirSync(scratch, { recursive: true });
 const lastMsgPath = path.join(scratch, "last-message.txt");
 const eventsPath = path.join(scratch, "events.jsonl");
 const stderrPath = path.join(scratch, "stderr.log");
+// Reusing a scratch directory must not report the previous run's answer.
+writeFileSync(lastMsgPath, "");
 
-// `codex exec resume` accepts a narrower flag set than `codex exec`
-// (verified 0.143.0/0.144.0): no --sandbox/--oss/-C/--add-dir. Sandbox
-// maps to the sandbox_mode config key; the rest are hard errors on resume.
-// --search: the exec flag was removed in codex 0.144.0; the top-level
-// web_search config key (disabled|cached|indexed|live) replaces it and
-// works on both exec and resume.
+// Resume and fork have narrower flags (verified CLI 0.153.4). Map sandbox
+// through config; use the web_search config key for all invocation modes.
 const argv = ["exec"];
-if (opts.resume) {
-  for (const [flag, set] of [
-    ["--local", opts.local],
-    ["--cd", opts.cd],
-    ["--add-dir", opts.addDirs.length > 0],
-  ]) {
-    if (set) die(`${flag} is not supported on resume (codex exec resume has no such flag)`);
-  }
-  argv.push("resume", opts.resume === "last" ? "--last" : opts.resume);
-  argv.push("--json", "-o", lastMsgPath, "-c", `sandbox_mode="${sandbox}"`);
+if (continuation) {
+  argv.push(continuation, opts.resume === "last" ? "--last" : (opts.resume ?? opts.fork));
+  argv.push("--json", "-c", `sandbox_mode="${sandbox}"`);
+  if (!forkOnly) argv.push("-o", lastMsgPath);
 } else {
   argv.push("--json", "-o", lastMsgPath, "--sandbox", sandbox);
+  if (opts.approveForMe) argv.push("--approve-for-me");
   if (opts.local) {
     argv.push("--oss");
     if (opts.localProvider) argv.push("--local-provider", opts.localProvider);
@@ -128,22 +153,28 @@ const gitCheck = spawnSync("git", ["-C", workRoot, "rev-parse", "--is-inside-wor
 if (gitCheck.status !== 0) argv.push("--skip-git-repo-check");
 
 if (opts.search) argv.push("-c", `web_search="live"`);
-// Codex "Fast" service tier: 1.5x speed, increased usage burn. Config
-// key service_tier="fast" maps to the request tier "priority".
+// Fast is a model-dependent service tier, independent of reasoning effort.
 if (opts.fast) argv.push("-c", `service_tier="fast"`);
 if (opts.model) argv.push("-m", MODEL_ALIASES[opts.model] ?? opts.model);
 if (opts.effort) argv.push("-c", `model_reasoning_effort="${opts.effort}"`);
-if (opts.schema) argv.push("--output-schema", opts.schema);
-for (const img of opts.images) argv.push("-i", img);
+if (opts.schema) argv.push("--output-schema", path.resolve(opts.schema));
+for (const img of opts.images) argv.push("-i", path.resolve(img));
 for (const c of opts.overrides) argv.push("-c", c);
 if (opts.ephemeral) argv.push("--ephemeral");
-if (prompt) argv.push(prompt);
+if (prompt) argv.push("--", prompt);
 
 const bin = process.env.CDX_CODEX_BIN || "codex";
 const child = spawn(bin, argv, { stdio: ["ignore", "pipe", "pipe"] });
+// Let Codex shut down and close its streams when a caller cancels this runner.
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.on(signal, () => child.kill(signal));
+}
 
 const eventsOut = createWriteStream(eventsPath);
 const stderrOut = createWriteStream(stderrPath);
+// Attach handlers before the streams open so filesystem errors cannot be unhandled.
+const artifactsFinished = Promise.all([finished(eventsOut), finished(stderrOut)])
+  .then(() => null, (err) => err);
 let stderrTail = "";
 child.stderr.on("data", (buf) => {
   stderrOut.write(buf);
@@ -172,7 +203,11 @@ rl.on("line", (line) => {
   else if (ev.type === "turn.completed") {
     state.completed = true;
     state.usage = ev.usage ?? null;
-  } else if (ev.type === "turn.failed") state.errors.push(ev.error?.message ?? "turn failed");
+  } else if (ev.type === "turn.started") state.completed = false;
+  else if (ev.type === "turn.failed") {
+    state.completed = false;
+    state.errors.push(ev.error?.message ?? "turn failed");
+  }
   else if (ev.type === "error") state.errors.push(ev.message ?? "unknown error");
   else if (ev.type === "item.completed" && ev.item) {
     const t = ev.item.type ?? "unknown";
@@ -182,13 +217,16 @@ rl.on("line", (line) => {
   }
 });
 
-child.on("close", (code) => {
+child.on("close", async (code) => {
   eventsOut.end();
   stderrOut.end();
-  const ok = state.completed && code === 0;
+  const artifactError = await artifactsFinished;
+  if (artifactError) state.errors.push(`Could not write artifacts: ${artifactError.message}`);
+  const operationOk = forkOnly ? Boolean(state.threadId) && !state.errors.length : state.completed;
+  const ok = operationOk && code === 0 && !artifactError;
   const lines = [];
   lines.push(`session: ${state.threadId ?? "unknown"}`);
-  lines.push(`status: ${ok ? "completed" : `failed (exit ${code})`}`);
+  lines.push(`status: ${ok ? (forkOnly ? "forked" : "completed") : `failed (exit ${code})`}`);
   const counts = Object.entries(state.itemCounts)
     .map(([k, v]) => `${k}=${v}`)
     .join(" ");
@@ -205,22 +243,24 @@ child.on("close", (code) => {
       finalMsg = readFileSync(lastMsgPath, "utf8");
     } catch {}
   }
-  lines.push("--- final message ---");
-  lines.push(finalMsg?.trim() || "(no final message)");
+  if (forkOnly && ok) lines.push("note: session forked; no model turn requested");
+  else {
+    lines.push("--- final message ---");
+    lines.push(finalMsg?.trim() || "(no final message)");
+  }
   if (state.errors.length) {
     lines.push("--- errors ---");
     for (const e of state.errors) lines.push(`- ${e}`);
-    if (stderrTail.trim()) lines.push(`stderr tail: ${stderrTail.trim().slice(-400)}`);
   }
+  if (!ok && stderrTail.trim()) lines.push(`stderr tail: ${stderrTail.trim()}`);
   lines.push("--- artifacts ---");
   lines.push(`events: ${eventsPath}`);
   lines.push(`last-message: ${lastMsgPath}`);
   lines.push(`stderr: ${stderrPath}`);
   process.stdout.write(lines.join("\n") + "\n");
-  process.exit(ok ? 0 : 1);
+  process.exitCode = ok ? 0 : 1;
 });
 
 child.on("error", (err) => {
-  process.stderr.write(`codex-run: failed to spawn ${bin}: ${err.message}\n`);
-  process.exit(1);
+  state.errors.push(`failed to spawn ${bin}: ${err.message}`);
 });

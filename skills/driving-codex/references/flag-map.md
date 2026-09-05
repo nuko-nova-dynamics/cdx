@@ -1,89 +1,134 @@
-# Codex CLI flag map — verified against codex-cli 0.144.0 (2026-07-09)
+# Codex CLI flag map
 
-Runner flags map to these. Anything not wrapped by the runner can be
-passed with `-c key=value` or by calling `codex` directly.
+Checked against **codex-cli 0.153.4 on 2026-09-05** using installed
+`--help` for `exec`, `exec resume`, `exec fork`, and `review`. These
+observations describe that CLI version, not every provider or account.
+Recheck the installed command help when versions differ. The runner's
+`--help` is the source for the options it exposes.
 
-## codex exec (non-interactive; NO approval flag exists)
+## Fresh non-interactive runs
 
-| Flag | Notes |
+| CLI flag or configuration | Runner mapping and scope |
 |---|---|
-| `--json` | JSONL events on stdout (runner always sets) |
-| `-o, --output-last-message <file>` | final message to file (runner always sets) |
-| `-s, --sandbox <read-only\|workspace-write\|danger-full-access>` | runner: ro/write/full |
-| `-m, --model <model>` | runner `--model`; alias spark→gpt-5.3-codex-spark |
-| `-c model_reasoning_effort="<none\|minimal\|low\|medium\|high\|xhigh>"` | runner `--effort` |
-| `-c service_tier="fast"` | runner `--fast` — Codex "Fast" tier (id `priority`): 1.5x speed, increased usage; available on all models incl. gpt-5.6-sol; also `"flex"` exists |
-| `-c web_search="<disabled\|cached\|indexed\|live>"` | runner `--search` → `live`. The `--search` FLAG was REMOVED from exec in 0.144.0 (still exists on the interactive TUI); default mode is `cached` (OpenAI-maintained index, no external access) |
-| `-i, --image <file>...` | attach images |
-| `--output-schema <file>` | JSON Schema for final response |
-| `--oss` / `--local-provider <lmstudio\|ollama>` | runner `--local` |
-| `-C, --cd <dir>` | working root |
-| `--add-dir <dir>` | extra writable roots |
-| `--ephemeral` | no session persistence |
-| `--skip-git-repo-check` | allow outside a git repo — the RUNNER ADDS THIS AUTOMATICALLY when the effective working root (`--cd` target or cwd) is not a git repo; without it codex dies with "Not inside a trusted directory" |
-| `-p, --profile <name>` | layer $CODEX_HOME/<name>.config.toml |
-| `--enable <feature>` / `--disable <feature>` | feature flags (`codex features list`) |
-| `--ignore-user-config` / `--ignore-rules` / `--strict-config` | config hygiene |
-| `--color <always\|never\|auto>` | output color |
+| `--json` | Always set; events are saved to an artifact |
+| `-o, --output-last-message <file>` | Always set |
+| `--sandbox <read-only\|workspace-write\|danger-full-access>` | Required runner `--sandbox ro\|write\|full` |
+| `--approve-for-me` | Explicit opt-in to automatic approval review; runner requires fresh `--sandbox write` |
+| `--model <model>` | `--model`; only `spark` is an alias, for `gpt-5.3-codex-spark` |
+| `-c model_reasoning_effort="<level>"` | `--effort`; model support varies, see below |
+| `-c service_tier="fast"` | `--fast`; see availability and cost notes below |
+| `-c web_search="live"` | `--search`; `exec` has no standalone `--search` flag |
+| `--image <file>` | Repeatable runner `--image` |
+| `--output-schema <file>` | `--schema <path>` |
+| `--oss`, `--local-provider <lmstudio\|ollama>` | `--local [lmstudio\|ollama]` |
+| `--cd <dir>` | `--cd` |
+| `--add-dir <dir>` | Repeatable runner `--add-dir` |
+| `--ephemeral` | `--ephemeral` |
+| `--skip-git-repo-check` | Added when the effective working root is outside a Git repository |
+| `-c key=value` | Repeatable config override; maintain the selected execution boundaries |
 
-## codex exec resume
+The CLI also exposes profiles, feature toggles, config controls, and
+other options that the runner does not wrap. Use the relevant help for
+their exact syntax. Do not assume every CLI flag has a config equivalent.
 
-`codex exec resume [SESSION_ID] [PROMPT]` — UUID or thread name;
-`--last` for most recent; `--all` disables cwd filtering.
-NARROWER flag set than exec (verified 0.143.0/0.144.0): accepts `-c`,
-`-m`, `-i`, `--output-schema`, `--json`, `-o`, `--ephemeral`,
-`--skip-git-repo-check` — but NOT `--sandbox` (use
-`-c sandbox_mode="<mode>"`), `--oss`, `-C`, or `--add-dir`. The runner
-maps sandbox and web search to config keys automatically (so `--search`
-works on resume) and errors on the unsupported ones.
+## Model effort and speed
 
-## codex review (native reviewer, prose output)
+The runner accepts `none`, `minimal`, `low`, `medium`, `high`, `xhigh`,
+`max`, and `ultra` as a union of CLI effort settings; each model supports
+its own subset. Leave model and effort unset to inherit the user's
+configuration unless an override is requested or needed.
 
-`codex review [PROMPT]` with `--uncommitted` | `--base <branch>` |
-`--commit <sha>`, optional `--title <t>`. `-c`/`--enable`/`--disable`
-also accepted.
+The Astra entry in the local CLI model catalog inspected on 2026-09-05
+advertised `low`, `medium`, `high`, `xhigh`, `max`, and `ultra`.
+The public [Astra API model page](https://developers.openai.com/api/docs/models/gpt-6-astra)
+lists `low` through `max`. Treat `ultra` as CLI/account-dependent;
+neither `none` nor `minimal` is an Astra setting. Check current model
+metadata before choosing a level; `xhigh` is not a universal maximum.
 
-## codex cloud
+Fast mode changes serving speed independently of reasoning effort.
+The official [Codex speed documentation](https://learn.chatgpt.com/docs/agent-configuration/speed)
+states a 1.5x speed increase for GPT-5.6, GPT-5.5, and GPT-5.4.
+For Astra it states 2.5x Standard ChatGPT credit consumption where
+available, without that speed multiplier. ChatGPT credit multipliers
+do not describe API-key billing. Fast mode may also depend on the
+`fast_mode` feature setting; inspect the active configuration if the
+requested tier is unavailable.
 
-`codex cloud exec|list|status|diff|apply` — submit/browse/apply Codex
-Cloud tasks.
+The same source describes Spark as a separate model with its own
+limits, available to ChatGPT Pro during research preview. Do not use
+it as a universal fallback or promise lower cost without checking the
+account and current terms.
 
-## Sessions on disk
+## Resume and fork
 
-`~/.codex/session_index.jsonl`: `{"id","thread_name","updated_at"}`
-per line. Full transcripts under `~/.codex/sessions/<year>/...`.
+```text
+codex exec resume [OPTIONS] [SESSION_ID] [PROMPT]
+codex exec fork [OPTIONS] <SESSION_ID> [PROMPT]
+```
 
-## Other subcommands
+Resume accepts a session id or name, or `--last`; `--all` removes cwd
+filtering. Fork requires an explicit session id or name and creates a
+new session. The runner exposes `--resume <id|last>` and `--fork <id>`
+as mutually exclusive modes.
 
-`codex apply <task_id>` (git-apply latest agent diff), `codex fork`,
-`codex doctor`, `codex features list`, `codex sandbox` (run arbitrary
-commands inside Codex sandbox), `codex mcp-server` (Codex as MCP).
+A fork without a prompt only creates the session and reports
+`status: forked`, with no model turn. The runner omits the last-message
+option and rejects schemas, images, and `--ephemeral` in this mode.
+A prompted fork follows the normal completed-turn contract.
 
-## Event stream (`--json`)
+Both subcommands accept `-c`, `-m`, `-i`, `--output-schema`, `--json`,
+`-o`, `--ephemeral`, and `--skip-git-repo-check`. Their direct flag sets
+omit `--sandbox`, `--approve-for-me`, `--oss`, `--cd`, and `--add-dir`.
+The runner maps sandbox to `-c sandbox_mode="<mode>"` and search to
+`-c web_search="live"`; it rejects unsupported mode-specific options.
+Use an explicit session id for automation when selecting the wrong
+recent session would change the task.
 
-`thread.started{thread_id}` · `turn.started` ·
-`item.completed{item:{id,type,...}}` with item types
-`agent_message{text}` / `command_execution` / `error{message}` ·
-`turn.completed{usage{input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens}}`
-· `turn.failed{error{message}}` · top-level `error{message}`.
+## Native review
 
-## stdin footgun (why the runner exists)
+```text
+codex review [OPTIONS] [PROMPT]
+```
 
-`codex exec` reads piped stdin until EOF even when a prompt argument is
-given ("stdin is appended as a `<stdin>` block"). Claude Code's
-background Bash keeps the stdin pipe open forever → codex hangs at
-"Reading additional input from stdin..." with zero CPU. The runner is
-immune (spawns with stdin ignored). Raw `codex exec` in background
-Bash MUST append `< /dev/null`.
+Choose one of `--uncommitted`, `--base <branch>`, or `--commit <sha>`.
+These target flags conflict with `[PROMPT]` in 0.153.4. For custom
+focus, prefer the structured runner path, or use a prompt containing
+both target and focus without any target flag when native review was
+explicitly requested. `--title` labels a commit review. Config and
+feature overrides are also available; consult `codex review --help`.
 
-## Known sandbox noise
+Native `--base` compares the base branch's merge base with the current
+working tree, including tracked staged and unstaged edits. Use
+`git merge-base <ref> HEAD` followed by `git diff <merge-base-sha>` for
+the same target in structured or custom-prompt reviews. A comparison to
+HEAD alone would omit local edits and change the scope between paths.
 
-Under `workspace-write`, fnm's shell init fails to create its
-multishell symlink (`~/.local/state/fnm_multishells ... Operation not
-permitted`) in codex-spawned shells. Non-fatal — node still resolves
-via inherited PATH. Ignore it.
+## Sessions and other commands
 
-## Danger flags — NEVER USE
+When present, `${CODEX_HOME:-$HOME/.codex}/session_index.jsonl` contains
+records with `id`, `thread_name`, and `updated_at`. This is a local
+storage detail and may change independently of CLI flags. If absent,
+inspect the installed session-management commands instead of assuming
+the account has no sessions.
 
-`--dangerously-bypass-approvals-and-sandbox`,
-`--dangerously-bypass-hook-trust`.
+`codex fork` is interactive; automation uses `codex exec fork`.
+`codex apply <task_id>` applies an agent diff. `codex cloud` provides
+`exec`, `list`, `status`, `diff`, and `apply`. Inspect each command's
+help before use rather than reusing flags from `exec`.
+
+## Event stream and stdin
+
+The runner observes `thread.started`, `turn.started`, `item.completed`,
+`turn.completed`, `turn.failed`, and error events. A model task requires
+both a completed turn and a successful process exit. A fork-only operation
+requires a new session id, successful exit, and no error. Inspect the
+reported operation and artifacts before treating the task as complete.
+
+Installed `codex exec --help` states that piped stdin is appended to a
+prompt argument. A background process whose stdin never closes can
+therefore wait for more input. The runner spawns Codex with stdin
+ignored to prevent that wait.
+
+Use the installed CLI as the primary source for command syntax. For
+concepts and current service behavior, consult OpenAI's
+[Codex source repository](https://github.com/openai/codex).

@@ -1,100 +1,21 @@
-# Codex Prompt Anti-Patterns
+# Codex prompt anti-patterns
 
-Avoid these when prompting Codex or GPT-5.4.
+Use observed failures to decide which instruction needs changing.
 
-## Vague task framing
+| Pattern | Why it fails | Better direction |
+|---|---|---|
+| "Take a look and tell me what you think" | No review target or decision | Specify the change, concern, and evidence expected |
+| "Think harder" | Does not identify missing work | Name the uncertainty and the check that could resolve it |
+| A mandatory stack of XML blocks for every task | Adds constraints unrelated to the job | State the outcome and include only relevant boundaries |
+| Splitting one fix, its tests, and its docs into unrelated runs | Loses the shared completion criterion | Keep coherent work together; split independent scopes |
+| "Keep investigating until completely certain" | Has no reachable stopping condition | Define sufficient evidence and report remaining uncertainty |
+| "Run every test and audit everything" for a small change | Expands work beyond the affected behavior | Name proportional checks and when to stop |
+| "Ask before every write" after a fix is already authorized | Prevents execution of the requested task | Preserve the existing authorization and actual stop boundary |
+| An unqualified "never ask questions" | Hides decisions required for correctness | Resolve routine choices; surface only material missing decisions |
+| "Tell me exactly why production failed" without evidence | Encourages unsupported certainty | Require observed evidence and label inference |
+| "Use xhigh, the maximum effort" | Assumes all models expose the same levels | Check the selected model and installed CLI's supported settings |
+| Retrying a failed write task solely to repair report formatting | Can repeat completed mutations | Inspect artifacts and recover the report without replaying work |
 
-Bad:
-
-```text
-Take a look at this and let me know what you think.
-```
-
-Better:
-
-```xml
-<task>
-Review this change for material correctness and regression risks.
-</task>
-```
-
-## Missing output contract
-
-Bad:
-
-```text
-Investigate and report back.
-```
-
-Better:
-
-```xml
-<structured_output_contract>
-Return:
-1. root cause
-2. evidence
-3. smallest safe next step
-</structured_output_contract>
-```
-
-## No follow-through default
-
-Bad:
-
-```text
-Debug this failure.
-```
-
-Better:
-
-```xml
-<default_follow_through_policy>
-Keep going until you have enough evidence to identify the root cause confidently.
-</default_follow_through_policy>
-```
-
-## Asking for more reasoning instead of a better contract
-
-Bad:
-
-```text
-Think harder and be very smart.
-```
-
-Better:
-
-```xml
-<verification_loop>
-Before finalizing, verify that the answer matches the observed evidence and task requirements.
-</verification_loop>
-```
-
-## Mixing unrelated jobs into one run
-
-Bad:
-
-```text
-Review this diff, fix the bug you find, update the docs, and suggest a roadmap.
-```
-
-Better:
-- Run review first.
-- Run a separate fix prompt if needed.
-- Use a third run for docs or roadmap work.
-
-## Unsupported certainty
-
-Bad:
-
-```text
-Tell me exactly why production failed.
-```
-
-Better:
-
-```xml
-<grounding_rules>
-Ground every claim in the provided context or tool outputs.
-If a point is an inference, label it clearly.
-</grounding_rules>
-```
+For scope, verification, and evidence examples, read
+[prompt blocks](prompt-blocks.md). For a complete task starting point,
+read [recipes](codex-prompt-recipes.md).
