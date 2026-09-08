@@ -1,6 +1,6 @@
 ---
 name: driving-codex
-description: Delegate work to the OpenAI Codex CLI, run code reviews, coordinate parallel workers, and resume or fork sessions. Use when the user asks to run Codex as another coding agent or manage an existing CLI run.
+description: Delegate work to the OpenAI Codex CLI, including coding, Computer Use, Chrome and browser tasks, code reviews, parallel workers, and session resume or fork. Use when the user asks Claude to hand work to Codex or manage an existing CLI run.
 ---
 
 # Driving Codex
@@ -8,6 +8,12 @@ description: Delegate work to the OpenAI Codex CLI, run code reviews, coordinate
 Choose the execution settings, give Codex a bounded task, and verify the
 result before acting on it. Preserve the user's model, permissions,
 scope, and existing authorization.
+
+For desktop apps, browser workflows, or visual verification, also read
+`cdx:codex-computer-use`. Before launching, announce that the task is being
+delegated to Codex and name the requested plugin and app or browser/profile.
+Include those requirements in Codex's prompt and verify actual tool use in
+its result. Plugin selection is a prompt requirement, not a runner flag.
 
 ## Invocation contract
 
@@ -94,6 +100,8 @@ worktrees; a scratch directory isolates logs, not repository edits.
 
 Collect every result, resolve conflicting findings against the source,
 and synthesize one outcome. Keep dependent edits sequential.
+Use one worker at a time for a shared browser profile or desktop app;
+worktrees and scratch directories do not isolate UI state.
 
 ## Acting on results
 
