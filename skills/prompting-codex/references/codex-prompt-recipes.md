@@ -55,6 +55,34 @@ tradeoffs, and any uncertainty that could change it. Stop when the
 available evidence supports the decision or establishes the missing facts.
 ```
 
+## Desktop and browser workflows
+
+Before launching, Claude announces the Codex handoff and names the requested
+plugin and target. Follow `cdx:codex-computer-use`; include those same choices
+explicitly in the prompt. For a desktop inspection:
+
+```text
+Use Codex's Computer Use plugin to inspect <app/window> and report <setting>.
+Read the current tool instructions and verify the target with a non-mutating
+check before proceeding. This task is read-only; do not change the setting.
+Return the tool actually used, target, observed value, and any blocker.
+```
+
+For a browser action the user has authorized:
+
+```text
+Use Codex's Chrome/browser plugin with <browser/profile> at <URL> to
+<authorized action>. Discover the current tools and verify the browser,
+profile, and page before acting. If the requested target is unavailable or
+ambiguous, report that blocker. Read back <saved result> after the action.
+Return the actual tool, verified target, actions taken, completion evidence,
+and any remaining work. <Relevant stop boundary, if any.>
+```
+
+Name both plugins for a workflow spanning a desktop app and browser. A named
+profile remains part of the task across resume or fork, but connectivity and
+target identity need checking again when the UI state may have changed.
+
 ## Prompt patching
 
 ```text

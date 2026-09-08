@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0 - 2026-09-07
+
+- Add a Computer Use and browser delegation skill, including Chrome,
+  named browser profiles, the built-in browser, and workflows spanning apps.
+- Require Claude to announce the Codex handoff and put the requested plugin
+  and target explicitly in Codex's prompt. Report actual tool use and verify
+  the resulting app or page state.
+- Check plugin availability in the delegated session, preserve browser/profile
+  choices and existing authorization, and serialize workers sharing UI state.
+- Add optional plugin diagnostics to `/cdx:setup` and examples for desktop
+  and browser tasks. Runner flags and execution behavior are unchanged.
+
 ## 0.2.0 - 2026-09-05
 
 - Support the CLI's `max` and `ultra` reasoning levels while preserving inherited

@@ -8,6 +8,11 @@ Claude picks the right flags, runs `codex exec`, parses structured output, and
 acts on it: verifies findings against the repo, checks patches, and resumes
 or forks sessions.
 
+You can also ask **"have Codex use Computer Use to check this app"** or
+**"delegate this to Codex using the Chrome plugin in my Work profile"**.
+Claude announces the handoff, includes the requested plugin and target in
+Codex's prompt, and checks which tools Codex actually used.
+
 CLI surface verified against **codex-cli 0.153.4** on September 5, 2026.
 Requires Node >= 20 and a logged-in Codex CLI (`codex login`). Run
 `/cdx:setup` after changing CLI versions to check for drift.
@@ -46,12 +51,12 @@ supported; use the marketplace matching your existing installation.
 
 | Command | Purpose |
 |---|---|
-| `/cdx:task` | Delegate with model, effort, sandbox, Fast tier, search, images, schema, resume, fork, and local-provider options. `--approve-for-me` opts into automatic review on fresh workspace-write runs. |
+| `/cdx:task` | Delegate coding, desktop, or browser work with model, effort, sandbox, search, schema, and session controls. Name UI plugins and targets in the prompt. `--approve-for-me` opts into automatic review on fresh workspace-write runs. |
 | `/cdx:review` | Structured review Claude verifies finding-by-finding, or `--native` for Codex's built-in reviewer (`--uncommitted\|--base <ref>\|--commit <sha>`) |
 | `/cdx:fleet` | 2–4 parallel Codex workers: decomposed subtasks, multi-angle opinions, A/B implementations |
 | `/cdx:session` | `list`, `resume <id\|--last>`, `fork <id>`, `apply <task_id>` |
 | `/cdx:cloud` | Codex Cloud: `exec`, `list`, `status`, `diff`, `apply` |
-| `/cdx:setup` | Doctor: install, auth, version drift vs the verified flag map, config pitfalls, live smoke |
+| `/cdx:setup` | Doctor: install, auth, version drift, runner compatibility, live smoke. `--plugins` checks browser/Computer Use installation; add `--smoke` for a non-mutating runtime probe. |
 
 ## Skills
 
@@ -61,9 +66,42 @@ supported; use the marketplace matching your existing installation.
   version).
 - **codex-structured-output**: bundled schema library (`review-findings`,
   `verdict`, `task-report`, `patch-plan`) + rules for ad-hoc schemas.
+- **codex-computer-use**: explicit plugin handoffs, browser/profile selection,
+  live capability checks, app and page verification, and shared UI coordination.
 - **prompting-codex**: task framing, authorization, and proportional verification,
   with GPT-6 Astra guidance. Original templates were adapted from
   openai/codex-plugin-cc (Apache-2.0, see NOTICE).
+
+## Computer Use and browsers
+
+Ask Claude to delegate a UI task to Codex when Codex's installed plugins have
+the app or browser access the task needs:
+
+```text
+Have Codex use its Computer Use plugin to inspect the app's Preferences window
+and report the current export format. This is a read-only check.
+
+Delegate the signed-in settings check to Codex using its Chrome plugin in the
+Work profile. Verify the profile and report whether notifications are enabled.
+
+Have Codex use the built-in browser to verify the navigation on localhost:3000.
+```
+
+Claude names Codex and the requested plugin before launching. Codex checks its
+available tools and the target, completes the authorized task, and reads back
+the result. The report distinguishes actual plugin use from installed state.
+If the requested browser/profile cannot be verified, Codex reports that blocker.
+
+Computer Use and browser plugins must be available in the delegated Codex
+session, with the required app permissions or browser connection. cdx does not
+install them. Plugin packaging and tool APIs can vary across Codex versions;
+the skill requires discovery from the running session's instructions.
+
+Use `/cdx:setup --plugins` to inspect installation, or
+`/cdx:setup --plugins --smoke` with the desired capability/target for a
+non-mutating live check. The live check consumes normal Codex usage.
+See the [delegation skill](skills/codex-computer-use/SKILL.md) for the prompt
+contract and [official setup](https://learn.chatgpt.com/docs/computer-use).
 
 ## Models and reasoning
 
@@ -93,6 +131,10 @@ on the selected model and sign-in method. See the maintained
   Sandbox and approval policy are distinct controls; neither authorizes
   unrelated external actions.
 - The `--dangerously-bypass-*` flags are never used, under any circumstances.
+- Browser and app actions follow the task's authorization and their own access
+  controls. `--sandbox ro` does not make UI actions read-only; scoped prompts
+  must state the permitted actions. Workers sharing a browser/profile or app
+  operate sequentially.
 
 ## Testing
 
@@ -108,4 +150,4 @@ and reports its artifact paths. Model runs consume your normal Codex allowance.
 
 ## License
 
-Apache-2.0. Portions adapted from openai/codex-plugin-cc — see NOTICE.
+Apache-2.0. Portions adapted from openai/codex-plugin-cc; see NOTICE.

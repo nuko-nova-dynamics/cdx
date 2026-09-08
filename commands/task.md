@@ -1,5 +1,5 @@
 ---
-description: Delegate a Codex task with model, effort, sandbox, search, schema, and session controls
+description: Delegate coding, Computer Use, or browser tasks to Codex with model, effort, sandbox, search, schema, and session controls
 argument-hint: "[--bg|--wait] [--model m|spark] [--effort none|minimal|low|medium|high|xhigh|max|ultra] [--fast] [--sandbox ro|write|full] [--approve-for-me] [--search] [--image <f>] [--schema <name|file>] [--resume [id]|--fork <id>|--fresh] [--local [lmstudio|ollama]] [-c k=v] <prompt>"
 allowed-tools: Bash, Read, Grep, Glob
 ---
@@ -8,6 +8,10 @@ Use the cdx:driving-codex skill. Delegate the following through the runner:
 
 $ARGUMENTS
 
+- For desktop or browser work, also use `cdx:codex-computer-use`. Announce
+  the Codex handoff, name the requested plugin and app or browser/profile,
+  and include them explicitly in the delegated prompt. Verify actual
+  runtime access and tool use; `--search` does not select a browser.
 - `--bg` and `--wait` select background or foreground Bash execution;
   strip them before invoking the runner. Default to background for
   longer work and foreground for short probes.

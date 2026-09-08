@@ -1,7 +1,7 @@
 {
   "name": "cdx",
-  "version": "0.2.0",
-  "description": "Delegate work from Claude Code to Codex with model-aware prompts, structured reviews, parallel workers, and noninteractive session resume and fork.",
+  "version": "0.3.0",
+  "description": "Delegate coding, Computer Use, and browser tasks from Claude Code to Codex with explicit plugin and profile selection, verified results, structured reviews, and session controls.",
   "author": {
     "name": "Nuko Nova Dynamics",
     "email": "hello@nukonova.com"
@@ -9,5 +9,5 @@
   "homepage": "https://github.com/nuko-nova-dynamics/cdx",
   "repository": "https://github.com/nuko-nova-dynamics/cdx",
   "license": "Apache-2.0",
-  "keywords": ["codex", "openai", "delegation", "code-review", "multi-model"]
+  "keywords": ["codex", "openai", "delegation", "code-review", "multi-model", "computer-use", "browser"]
 }

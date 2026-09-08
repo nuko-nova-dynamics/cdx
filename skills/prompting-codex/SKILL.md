@@ -1,6 +1,6 @@
 ---
 name: prompting-codex
-description: Compose task prompts for Codex delegation, including GPT-6 Astra, with clear scope, evidence, completion criteria, and output requirements. Use before non-trivial CLI delegation or when improving a failing Codex prompt.
+description: Compose task prompts for Codex delegation, including GPT-6 Astra, coding, Computer Use and browser workflows, with clear scope, tools, evidence, completion criteria, and output requirements. Use before non-trivial CLI delegation or when improving a failing Codex prompt.
 ---
 
 # Prompting Codex
@@ -48,6 +48,11 @@ they do not assume every model supports Astra's settings.
   and separate conclusions from unresolved questions.
 - For a write-capable run, include any relevant ownership boundaries
   and external actions already authorized or explicitly deferred.
+- For a desktop or browser task, explicitly require the Computer Use,
+  Chrome/browser, or built-in browser plugin in the delegated prompt.
+  Carry over the exact app, browser/profile, and tab context. Require
+  live capability and target checks, the actual tool used, and a read-back
+  of the result. Read `cdx:codex-computer-use` for the handoff contract.
 
 Resume or fork follow-ups should usually contain the delta instruction.
 Restate scope only when it changed or the saved context could be ambiguous.
