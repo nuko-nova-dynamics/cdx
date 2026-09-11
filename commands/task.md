@@ -1,6 +1,6 @@
 ---
 description: Delegate coding, Computer Use, or browser tasks to Codex with model, effort, sandbox, search, schema, and session controls
-argument-hint: "[--bg|--wait] [--model m|spark] [--effort none|minimal|low|medium|high|xhigh|max|ultra] [--fast] [--sandbox ro|write|full] [--approve-for-me] [--search] [--image <f>] [--schema <name|file>] [--resume [id]|--fork <id>|--fresh] [--local [lmstudio|ollama]] [-c k=v] <prompt>"
+argument-hint: "[--bg|--wait] [--model m|spark] [--effort none|minimal|low|medium|high|xhigh|max|ultra] [--fast] [--lean] [--sandbox ro|write|full] [--approve-for-me] [--search] [--image <f>] [--schema <name|file>] [--resume [id]|--fork <id>|--fresh] [--local [lmstudio|ollama]] [-c k=v] <prompt>"
 allowed-tools: Bash, Read, Grep, Glob
 ---
 

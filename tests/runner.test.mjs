@@ -289,3 +289,31 @@ test("unwritable artifact destinations fail without an unhandled stream error", 
   assert.match(r.stdout, /Could not write artifacts/);
   assert.doesNotMatch(r.stderr, /Unhandled/);
 });
+
+test("--lean skips user config and connector apps on a fresh run", (t) => {
+  const r = isolatedRun(t, ["--sandbox", "ro", "--lean", "--model", "gpt-5.6-luna", "--effort", "xhigh", "--", "hello"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(r.args.includes("--ignore-user-config"));
+  assert.ok(r.args.includes("apps._default.enabled=false"));
+  assert.equal(r.args[r.args.indexOf("-m") + 1], "gpt-5.6-luna");
+  assert.ok(r.args.includes('model_reasoning_effort="xhigh"'));
+});
+
+test("--lean rejects continuation, --local, and a missing model", () => {
+  const resume = run(["--sandbox", "ro", "--lean", "--model", "gpt-5.6-luna", "--resume", "abc-123", "--", "more"]);
+  assert.notEqual(resume.status, 0);
+  assert.match(resume.stderr, /--lean is only supported on a fresh run/);
+  const local = run(["--sandbox", "ro", "--lean", "--local", "--model", "gpt-5.6-luna", "--", "hello"]);
+  assert.notEqual(local.status, 0);
+  assert.match(local.stderr, /--lean cannot be combined with --local/);
+  const noModel = run(["--sandbox", "ro", "--lean", "--", "hello"]);
+  assert.notEqual(noModel.status, 0);
+  assert.match(noModel.stderr, /--lean requires --model/);
+});
+
+test("--lean accepts CDX_DEFAULT_MODEL in place of --model", (t) => {
+  const r = isolatedRun(t, ["--sandbox", "ro", "--lean", "--", "hello"], { CDX_DEFAULT_MODEL: "gpt-5.6-luna", CDX_DEFAULT_EFFORT: "xhigh" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(r.args.includes("--ignore-user-config"));
+  assert.equal(r.args[r.args.indexOf("-m") + 1], "gpt-5.6-luna");
+});

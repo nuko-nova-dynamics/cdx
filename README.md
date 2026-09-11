@@ -118,7 +118,10 @@ flags still win.
 When no model is named, Claude routes by task: Sol plans and merges, Luna
 xhigh runs well-briefed mechanical work and fleet workers, Terra high takes
 large-context or thin-brief workers, and Astra is reserved for hard
-single-session tasks. The reasoning, with dated benchmark and cost evidence,
+single-session tasks. Workers run with `--lean`, which starts Codex without
+your `config.toml` (MCP servers, connector apps, hooks, personality, context
+overrides) while auth, the repository `AGENTS.md`, and `.rules` still load;
+it needs an explicit model and is not available on resume, fork, or `--local`. The reasoning, with dated benchmark and cost evidence,
 is in the [model routing reference](skills/driving-codex/references/model-routing.md).
 
 ```bash

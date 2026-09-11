@@ -27,6 +27,13 @@ boundaries clearer; tags and a fixed collection of blocks are optional.
   literally and will not infer missing pieces. Sol and Astra can take a
   thinner brief and resolve routine gaps themselves, so give them the
   goal and constraints rather than a step list.
+- Every worker brief ends with three sentences: style and ordering
+  rules apply only to lines you add; do not modify any line you were
+  not asked to change; list every hunk you touched in the final message.
+  Verify each command you name against the package scripts and test
+  config first, and say whether a dev server or network is allowed and
+  what to do if a check cannot run, so the worker reports instead of
+  retrying with escalation requests.
 
 ## Autonomy and verification
 

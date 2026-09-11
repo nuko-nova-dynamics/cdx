@@ -119,6 +119,21 @@ cost 22% of a Pro weekly window on Sol. The same tokens price at about
 5. Never route by effort alone. Effort changes reasoning tokens, which
    are under 1% of a typical Codex request; model choice changes the
    per-token rate by 20x.
+6. Workers run `--lean`. A 2026-09-11 Luna probe on codex-cli 0.154.0
+   started at 25,115 input tokens with the user's config and 17,223
+   without it, and the two MCP servers that failed to start on every
+   normal run were gone. The remaining constant is `$CODEX_HOME/AGENTS.md`,
+   which still loads; keep it short and scope writing-style rules to
+   prose deliverables so workers do not read a writing skill before a
+   code change.
+7. A Luna brief carries three guard sentences: style and ordering rules
+   apply only to lines you add; do not modify any line you were not
+   asked to change; list every hunk you touched in the final message.
+   Observed 2026-09-11: a Luna xhigh worker asked to delete a route
+   also rewrote two historical changelog entries to remove em dashes
+   and moved a Security section to match a group order given in the
+   brief, then reported the reorder in passing and the rewrites not at
+   all. Review caught it; the sentences prevent it.
 
 The host can set `CDX_DEFAULT_MODEL` and `CDX_DEFAULT_EFFORT` in its
 environment; explicit `--model` and `--effort` flags always win.

@@ -1,6 +1,6 @@
 {
   "name": "cdx",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Delegate coding, Computer Use, and browser tasks from Claude Code to Codex with explicit plugin and profile selection, verified results, structured reviews, and session controls.",
   "author": {
     "name": "Nuko Nova Dynamics",

@@ -49,6 +49,20 @@ Rules that go with the table:
   request.
 - Keep the context small: fresh session per task, compaction at the
   model's real window, no repository dumps in the prompt.
+- Run every fleet worker and well-briefed mechanical run with `--lean`.
+  It starts Codex without the user's `config.toml` (MCP servers,
+  connector apps, hooks, personality, context overrides) while auth,
+  the repository `AGENTS.md`, and execpolicy rules still load. Measured
+  on a Luna probe it cut the first-request context from 25.1k to 17.2k
+  tokens and removed MCP startup errors. `--lean` needs an explicit
+  model and effort and is not available on resume, fork, or `--local`.
+  Keep the full config for planning and review sessions, anything that
+  needs Computer Use, Chrome, a browser profile, or an MCP server, and
+  for the user's own interactive work.
+- A Luna brief also states: style and ordering rules apply only to
+  lines you add; do not modify any line you were not asked to change;
+  list every hunk you touched in the final message. Luna applies
+  file-wide rules to neighbouring text otherwise.
 - Host defaults `CDX_DEFAULT_MODEL` and `CDX_DEFAULT_EFFORT` apply only
   when Claude passes no flags; the table above means Claude usually
   passes them.
@@ -95,6 +109,9 @@ management have separate commands below. For long tasks, use Bash
   `gpt-5.3-codex-spark`; use it when requested and available to the
   account. See the dated model notes in the flag map for `max` and
   CLI-specific `ultra` availability.
+- **--lean**: strip the user's config for a worker (see "Choose the
+  model first"). Fresh runs only, explicit model required, never with
+  `--local` or a task that needs an MCP server or a UI plugin.
 - **--fast**: request faster serving of the selected model via
   `service_tier="fast"`. It is independent of reasoning effort, so it
   can be combined with a supported high effort. Availability, latency,
@@ -141,8 +158,10 @@ worktrees; a scratch directory isolates logs, not repository edits.
 
 Every worker resends its whole context on every turn, so a fan-out
 multiplies cost by the worker count. Workers follow "Choose the model
-first": Luna xhigh with a full brief, Terra high for large-context or
-thin-brief workers, Sol for the plan and the merge, never Astra.
+first": `--lean`, Luna xhigh with a full brief, Terra high for
+large-context or thin-brief workers, Sol for the plan and the merge,
+never Astra. Workers that operate a browser, desktop app, or MCP server
+run without `--lean` and one at a time.
 
 Collect every result, resolve conflicting findings against the source,
 and synthesize one outcome. Keep dependent edits sequential.

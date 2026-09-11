@@ -17,6 +17,7 @@ Recheck the installed command help when versions differ. The runner's
 | `--model <model>` | `--model`; only `spark` is an alias, for `gpt-5.3-codex-spark` |
 | `-c model_reasoning_effort="<level>"` | `--effort`; model support varies, see below |
 | `-c service_tier="fast"` | `--fast`; see availability and cost notes below |
+| `--ignore-user-config` + `-c apps._default.enabled=false` | `--lean`; fresh runs only, explicit model required, not with `--local`. Verified on codex-cli 0.154.0 (2026-09-11): auth, repository `AGENTS.md`, `$CODEX_HOME/AGENTS.md`, and `.rules` still load; MCP servers, connector apps, hooks, personality, and config overrides do not |
 | `-c web_search="live"` | `--search`; `exec` has no standalone `--search` flag |
 | `--image <file>` | Repeatable runner `--image` |
 | `--output-schema <file>` | `--schema <path>` |

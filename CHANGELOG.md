@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0 - 2026-09-11
+
+- Add runner `--lean` for fleet workers and mechanical runs: passes
+  `--ignore-user-config` and `-c apps._default.enabled=false`, so the worker
+  starts without the user's MCP servers, connector apps, hooks, personality,
+  or context overrides. Auth, the repository `AGENTS.md`, and execpolicy
+  rules still load. Measured on a Luna probe: first-request context fell
+  from 25.1k to 17.2k tokens and MCP startup errors went from two to zero.
+  Requires an explicit model (or `CDX_DEFAULT_MODEL`); not available with
+  `--resume`, `--fork`, or `--local`.
+- The skill now sends every fleet worker and well-briefed mechanical run
+  through `--lean`, keeps full config for planning, review, Computer Use,
+  browser, and MCP-dependent tasks, and adds Luna brief rules: style and
+  ordering instructions apply only to lines the worker adds, no unrequested
+  edits, and every touched hunk listed in the final message.
+
 ## 0.3.2 - 2026-09-11
 
 - Move model routing into the driving-codex skill body as a "Choose the

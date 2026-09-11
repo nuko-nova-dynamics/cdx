@@ -15,7 +15,7 @@ const MODEL_ALIASES = { spark: "gpt-5.3-codex-spark" };
 const EFFORTS = new Set(["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]);
 const LOCAL_PROVIDERS = new Set(["lmstudio", "ollama"]);
 
-const USAGE = "usage: codex-run.mjs --sandbox <ro|write|full> [--model <m|spark>] [--effort <e>] [--fast] [--search] " +
+const USAGE = "usage: codex-run.mjs --sandbox <ro|write|full> [--model <m|spark>] [--effort <e>] [--fast] [--search] [--lean] " +
   "[--approve-for-me] [--image <f>]... [--schema <path>] [--resume <id|last> | --fork <id>] " +
   "[--local [lmstudio|ollama]] [--add-dir <d>]... [--cd <dir>] [-c k=v]... " +
   "[--ephemeral] [--scratch <dir>] -- <prompt...>\n";
@@ -50,6 +50,8 @@ function parseArgs(argv) {
       o.search = true;
     } else if (a === "--fast") {
       o.fast = true;
+    } else if (a === "--lean") {
+      o.lean = true;
     } else if (a === "--approve-for-me") {
       o.approveForMe = true;
     } else if (a === "--image") {
@@ -102,6 +104,11 @@ if (opts.approveForMe && (sandbox !== "workspace-write" || continuation)) {
 }
 const prompt = opts.promptParts.join(" ").trim();
 if (!prompt && !continuation) die("a prompt is required (or --resume <id|last> / --fork <id>)");
+if (opts.lean && continuation) die(`--lean is only supported on a fresh run, not ${continuation}`);
+if (opts.lean && opts.local) die("--lean cannot be combined with --local (the local provider lives in config.toml)");
+if (opts.lean && !(opts.model || process.env.CDX_DEFAULT_MODEL)) {
+  die("--lean requires --model (or CDX_DEFAULT_MODEL): config.toml defaults are not loaded");
+}
 const forkOnly = Boolean(opts.fork && !prompt);
 if (forkOnly && (opts.schema || opts.images.length || opts.ephemeral)) {
   die("--fork requires a prompt when using --schema, --image, or --ephemeral");
@@ -135,6 +142,11 @@ if (continuation) {
 } else {
   argv.push("--json", "-o", lastMsgPath, "--sandbox", sandbox);
   if (opts.approveForMe) argv.push("--approve-for-me");
+  // Lean workers skip the user's config.toml (MCP servers, connector apps,
+  // hooks, personality, context overrides) and connector apps; auth, the
+  // repository AGENTS.md, and execpolicy rules still load. Explicit --model
+  // and --effort are required because config defaults are gone.
+  if (opts.lean) argv.push("--ignore-user-config", "-c", "apps._default.enabled=false");
   if (opts.local) {
     argv.push("--oss");
     if (opts.localProvider) argv.push("--local-provider", opts.localProvider);
