@@ -8,9 +8,12 @@ import path from "node:path";
 const RUNNER = new URL("../scripts/codex-run.mjs", import.meta.url).pathname;
 const FAKE = new URL("./fixtures/fake-codex", import.meta.url).pathname;
 
+// Host defaults must not leak into the tests; each test sets them explicitly.
+const { CDX_DEFAULT_MODEL: _m, CDX_DEFAULT_EFFORT: _e, ...BASE_ENV } = process.env;
+
 function run(args, extraEnv = {}) {
   return spawnSync("node", [RUNNER, ...args], {
-    env: { ...process.env, CDX_CODEX_BIN: FAKE, ...extraEnv },
+    env: { ...BASE_ENV, CDX_CODEX_BIN: FAKE, ...extraEnv },
     encoding: "utf8",
   });
 }
@@ -147,6 +150,32 @@ test("model and effort remain inherited unless explicitly requested", (t) => {
   assert.ok(!r.args.includes("-m"));
   assert.ok(!r.args.some((a) => a.startsWith("model_reasoning_effort=")));
   assert.ok(!r.args.includes("--approve-for-me"));
+});
+
+test("CDX_DEFAULT_MODEL and CDX_DEFAULT_EFFORT apply when flags are absent", (t) => {
+  const env = { CDX_DEFAULT_MODEL: "gpt-5.6-luna", CDX_DEFAULT_EFFORT: "xhigh" };
+  const r = isolatedRun(t, ["--sandbox", "ro", "--", "hello"], env);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.args[r.args.indexOf("-m") + 1], "gpt-5.6-luna");
+  assert.ok(r.args.includes('model_reasoning_effort="xhigh"'));
+});
+
+test("explicit --model and --effort override the host defaults", (t) => {
+  const env = { CDX_DEFAULT_MODEL: "gpt-5.6-luna", CDX_DEFAULT_EFFORT: "xhigh" };
+  const r = isolatedRun(t, ["--sandbox", "ro", "--model", "gpt-5.6-sol", "--effort", "medium", "--", "hello"], env);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.args[r.args.indexOf("-m") + 1], "gpt-5.6-sol");
+  assert.ok(r.args.includes('model_reasoning_effort="medium"'));
+  assert.ok(!r.args.includes('model_reasoning_effort="xhigh"'));
+});
+
+test("--local ignores CDX_DEFAULT_MODEL and an invalid CDX_DEFAULT_EFFORT is a usage error", (t) => {
+  const r = isolatedRun(t, ["--sandbox", "ro", "--local", "--", "hello"], { CDX_DEFAULT_MODEL: "gpt-5.6-luna" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(!r.args.includes("-m"));
+  const bad = run(["--sandbox", "ro", "--", "hello"], { CDX_DEFAULT_EFFORT: "bogus" });
+  assert.notEqual(bad.status, 0);
+  assert.match(bad.stderr, /CDX_DEFAULT_EFFORT/);
 });
 
 for (const effort of ["max", "ultra"]) {

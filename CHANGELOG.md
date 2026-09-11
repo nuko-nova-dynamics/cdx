@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1 - 2026-09-11
+
+- Add a dated model routing reference (Astra, Sol, Terra, Luna): strengths,
+  weaknesses, when to use each, typical workflows, and Codex credit cost
+  against a ChatGPT subscription. Fleet workers now default to Luna xhigh
+  with a detailed brief, Terra high for large-context or thin-brief
+  workers, Sol for planning and merges; never fan out Astra.
+- Runner honors `CDX_DEFAULT_MODEL` and `CDX_DEFAULT_EFFORT` from the host
+  environment when `--model` or `--effort` is not passed. Explicit flags
+  win; `--local` runs ignore the model default.
+
 ## 0.3.0 - 2026-09-07
 
 - Add a Computer Use and browser delegation skill, including Chrome,

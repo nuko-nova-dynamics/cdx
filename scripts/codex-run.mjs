@@ -155,8 +155,14 @@ if (gitCheck.status !== 0) argv.push("--skip-git-repo-check");
 if (opts.search) argv.push("-c", `web_search="live"`);
 // Fast is a model-dependent service tier, independent of reasoning effort.
 if (opts.fast) argv.push("-c", `service_tier="fast"`);
-if (opts.model) argv.push("-m", MODEL_ALIASES[opts.model] ?? opts.model);
-if (opts.effort) argv.push("-c", `model_reasoning_effort="${opts.effort}"`);
+// Model and effort precedence: explicit flag, then CDX_DEFAULT_MODEL /
+// CDX_DEFAULT_EFFORT from the host environment, then the user's Codex
+// config. Local runs keep the --oss model.
+const model = opts.model ?? (opts.local ? undefined : process.env.CDX_DEFAULT_MODEL || undefined);
+if (model) argv.push("-m", MODEL_ALIASES[model] ?? model);
+const effort = opts.effort ?? (process.env.CDX_DEFAULT_EFFORT || undefined);
+if (effort && !EFFORTS.has(effort)) die(`CDX_DEFAULT_EFFORT must be one of: ${[...EFFORTS].join(", ")}`);
+if (effort) argv.push("-c", `model_reasoning_effort="${effort}"`);
 if (opts.schema) argv.push("--output-schema", path.resolve(opts.schema));
 for (const img of opts.images) argv.push("-i", path.resolve(img));
 for (const c of opts.overrides) argv.push("-c", c);

@@ -45,15 +45,25 @@ management have separate commands below. For long tasks, use Bash
   approval review. Requires `--sandbox write` on a fresh run. It routes
   approval requests to a reviewer; it does not grant blanket permission
   or bypass the sandbox.
-- **--model**: leave unset to inherit the user's configuration. Pass an
-  explicitly named model unchanged, including `gpt-6-astra`. The `spark`
-  alias maps to `gpt-5.3-codex-spark`; use it when requested and available
-  to the account. A model error is not permission to substitute another.
-- **--effort**: leave unset by default. If selecting an override, use a
-  level supported by that model in the installed CLI. For Astra, `low`
-  is the lighter option; `none` and `minimal` are unsupported. `xhigh`
-  is not a universal maximum. See the dated model notes in the flag map
-  for `max` and CLI-specific `ultra` availability.
+- **--model**: when the user names a model, pass it unchanged, including
+  `gpt-6-astra`. Otherwise choose by task using the
+  [model routing reference](references/model-routing.md): Sol for
+  planning and ambiguous work, Luna xhigh for well-briefed mechanical
+  work and fleet workers, Terra high for large-context or thin-brief
+  workers, Astra only for hard single-session tasks. Leave the flag
+  unset to inherit `CDX_DEFAULT_MODEL` from the host environment when
+  set, otherwise the user's Codex configuration. The `spark` alias maps
+  to `gpt-5.3-codex-spark`; use it when requested and available to the
+  account. A model error is not permission to substitute another.
+- **--effort**: leave unset to inherit `CDX_DEFAULT_EFFORT` or the
+  user's configuration. If selecting an override, use a level supported
+  by that model in the installed CLI. For Astra, `low` is the lighter
+  option; `none` and `minimal` are unsupported. `xhigh` is not a
+  universal maximum, and for Luna it beats `max` on cost and time at
+  equal quality. Effort changes reasoning tokens, which are a small
+  share of a request; model choice changes the per-token rate. See the
+  dated model notes in the flag map for `max` and CLI-specific `ultra`
+  availability.
 - **--fast**: request faster serving of the selected model via
   `service_tier="fast"`. It is independent of reasoning effort, so it
   can be combined with a supported high effort. Availability, latency,
@@ -97,6 +107,15 @@ independent subtasks can improve the result. Start with 2 workers and
 usually cap at 4. Give each worker a specific deliverable and its own
 `--scratch` directory. For writes, use disjoint file scopes or isolated
 worktrees; a scratch directory isolates logs, not repository edits.
+
+Every worker resends its whole context on every turn, so a fan-out
+multiplies cost by the worker count. Unless the user named a model,
+run workers on `--model gpt-5.6-luna --effort xhigh` with a detailed
+brief (plan, acceptance criteria, file scope, verification command),
+and move a worker to `gpt-5.6-terra --effort high` when it must hold a
+large context or its brief is thin. Plan and merge with Sol. Do not fan
+out Astra. Rationale and dated evidence:
+[model routing](references/model-routing.md).
 
 Collect every result, resolve conflicting findings against the source,
 and synthesize one outcome. Keep dependent edits sequential.

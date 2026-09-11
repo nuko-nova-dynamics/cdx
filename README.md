@@ -107,7 +107,16 @@ contract and [official setup](https://learn.chatgpt.com/docs/computer-use).
 
 The runner inherits your Codex model and effort by default. Explicit model IDs
 pass through unchanged; `spark` remains an alias for `gpt-5.3-codex-spark` when
-your account supports it.
+your account supports it. Set `CDX_DEFAULT_MODEL` and `CDX_DEFAULT_EFFORT` in
+the host environment (for example the `env` block of Claude Code's
+`settings.json`) to change the default without touching `config.toml`; explicit
+flags still win.
+
+When no model is named, Claude routes by task: Sol plans and merges, Luna
+xhigh runs well-briefed mechanical work and fleet workers, Terra high takes
+large-context or thin-brief workers, and Astra is reserved for hard
+single-session tasks. The reasoning, with dated benchmark and cost evidence,
+is in the [model routing reference](skills/driving-codex/references/model-routing.md).
 
 ```bash
 node scripts/codex-run.mjs --sandbox ro --model gpt-6-astra --effort max -- "Review this repository"
