@@ -35,8 +35,9 @@ their exact syntax. Do not assume every CLI flag has a config equivalent.
 
 The runner accepts `none`, `minimal`, `low`, `medium`, `high`, `xhigh`,
 `max`, and `ultra` as a union of CLI effort settings; each model supports
-its own subset. Leave model and effort unset to inherit the user's
-configuration unless an override is requested or needed.
+its own subset. Choose model and effort from the skill's "Choose the
+model first" table unless the user named them; unset flags fall back to
+`CDX_DEFAULT_MODEL` / `CDX_DEFAULT_EFFORT`, then the user's configuration.
 
 The Astra entry in the local CLI model catalog inspected on 2026-09-05
 advertised `low`, `medium`, `high`, `xhigh`, `max`, and `ultra`.

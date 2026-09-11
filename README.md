@@ -60,8 +60,11 @@ supported; use the marketplace matching your existing installation.
 
 ## Skills
 
-- **driving-codex**: invocation contract, flag heuristics, session
-  management, fleet fan-out, failure signatures. Reference:
+- **driving-codex**: the "Choose the model first" routing table (which
+  Codex model and effort for which task shape), invocation contract, flag
+  heuristics, session management, fleet fan-out, failure signatures.
+  References: `skills/driving-codex/references/model-routing.md` (dated
+  benchmark, cost, and community evidence) and
   `skills/driving-codex/references/flag-map.md` (stamped with the verified CLI
   version).
 - **codex-structured-output**: bundled schema library (`review-findings`,

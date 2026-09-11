@@ -21,6 +21,12 @@ boundaries clearer; tags and a fixed collection of blocks are optional.
 - Require evidence for uncertain claims and identify the checks that
   would establish completion. Set effort only after the task is clear;
   use a supported level from the driving skill's flag map.
+- Match the brief to the model chosen by the driving skill's routing
+  table. A Luna worker needs the plan, acceptance criteria, file scope,
+  and verification command spelled out; it follows instructions
+  literally and will not infer missing pieces. Sol and Astra can take a
+  thinner brief and resolve routine gaps themselves, so give them the
+  goal and constraints rather than a step list.
 
 ## Autonomy and verification
 

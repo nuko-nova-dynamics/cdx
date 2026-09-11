@@ -21,10 +21,11 @@ $ARGUMENTS
 - Map bare `--resume` to `--resume last` only when the intended session
   is unambiguous. `--fork <id>` starts a separate continuation. These
   modes are mutually exclusive; `--fresh` selects neither and is stripped.
-- Inherit model and effort unless overridden. Preserve exact requested
-  model names. The effort names above are the runner's accepted union;
-  select only levels supported by the actual model. Astra uses `low`
-  for lighter reasoning, not `none` or `minimal`.
+- Choose model and effort from the driving skill's "Choose the model
+  first" table unless overridden here. Preserve exact requested model
+  names. The effort names above are the runner's accepted union; select
+  only levels supported by the actual model. Astra uses `low` for
+  lighter reasoning, not `none` or `minimal`.
 - Add `--approve-for-me` only on an explicit request for automatic
   approval review, with fresh `--sandbox write`. It is unavailable on
   resume and fork in this runner.

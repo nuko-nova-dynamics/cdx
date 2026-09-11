@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.2 - 2026-09-11
+
+- Move model routing into the driving-codex skill body as a "Choose the
+  model first" table so a plain-language handoff ("have Codex do X")
+  picks model and effort by task shape without slash commands: Sol plans
+  and reviews, Luna xhigh implements well-briefed work and fleet workers,
+  Terra high takes large-context or thin-brief workers, Astra is reserved
+  for hard single sessions. Brief requirements per model and escalation
+  steps are stated alongside. The announcement now names the chosen model
+  and effort.
+
 ## 0.3.1 - 2026-09-11
 
 - Add a dated model routing reference (Astra, Sol, Terra, Luna): strengths,

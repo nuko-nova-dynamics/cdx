@@ -1,19 +1,60 @@
 ---
 name: driving-codex
-description: Delegate work to the OpenAI Codex CLI, including coding, Computer Use, Chrome and browser tasks, code reviews, parallel workers, and session resume or fork. Use when the user asks Claude to hand work to Codex or manage an existing CLI run.
+description: Delegate work to the OpenAI Codex CLI, including coding, Computer Use, Chrome and browser tasks, code reviews, parallel workers, and session resume or fork. Use whenever the user asks Claude in plain language to have Codex do something, hand work to Codex, or manage an existing CLI run; the skill decides the model, effort, sandbox, and flags.
 ---
 
 # Driving Codex
 
-Choose the execution settings, give Codex a bounded task, and verify the
-result before acting on it. Preserve the user's model, permissions,
-scope, and existing authorization.
+Choose the model and execution settings, give Codex a bounded task, and
+verify the result before acting on it. Preserve the user's permissions,
+scope, and existing authorization. The user normally delegates in plain
+language ("have Codex fix the failing tests"); every decision below is
+Claude's to make without asking, unless the user named a model, effort,
+or scope.
 
 For desktop apps, browser workflows, or visual verification, also read
 `cdx:codex-computer-use`. Before launching, announce that the task is being
-delegated to Codex and name the requested plugin and app or browser/profile.
+delegated to Codex, name the model and effort chosen and the reason in one
+clause, and name the requested plugin and app or browser/profile.
 Include those requirements in Codex's prompt and verify actual tool use in
 its result. Plugin selection is a prompt requirement, not a runner flag.
+
+## Choose the model first
+
+Codex bills a ChatGPT subscription per token of context on every turn,
+so the model's per-token rate decides cost; effort barely does. When the
+user has not named a model, pick from this table. Explicit user choices
+always win, and a model error is never permission to substitute.
+
+| Task shape | Model and effort | Why |
+|---|---|---|
+| Planning, decomposition, architecture, final merge decision | `gpt-5.6-sol --effort high` | Best planner in the family; its plans let cheaper models execute |
+| Ambiguous, cross-cutting, subtle debugging, security, concurrency | `gpt-5.6-sol --effort xhigh` | Needs judgment; Sol handles it at a fifth of Astra's cost |
+| Well-briefed implementation, mechanical edits, tests, refactors with a plan | `gpt-5.6-luna --effort xhigh` | Matches Terra on coding benchmarks at a tenth of the cost; xhigh beats max |
+| Fleet workers (any fan-out) | `gpt-5.6-luna --effort xhigh` per worker | Every worker resends its whole context each turn; cost scales with worker count |
+| Worker that must hold a large context (roughly 150k+) or a thin brief | `gpt-5.6-terra --effort high` | Terra retrieves from long context far better than Luna and infers intent from less |
+| Repo exploration, running checks, git operations, extraction | `gpt-5.6-luna --effort medium` | Cheap and adequate for bounded, verifiable steps |
+| Hardest single tasks the user cares about: unfamiliar systems, computer-use verification, research that must be right first time | `gpt-6-astra --effort medium` | Highest capability; drains the limit 3x to 5x faster than Sol, so one session, short context, never fanned out |
+| Review of a diff | `gpt-5.6-sol --effort medium` with the review schema | Sol judges contract fidelity; Luna misses details |
+
+Rules that go with the table:
+
+- A Luna worker needs a brief with the plan, acceptance criteria, file
+  scope, and the verification command. Without that, use Terra high or
+  Sol. Luna takes prompts literally and can leave work half done.
+- Escalate a failing worker one step: Luna to Terra high, Terra to Sol
+  medium, Sol to Sol xhigh. Do not jump to Astra to rescue a loop.
+- Prefer `xhigh` over `max` on every model unless the user asks for
+  max. Ultra spawns subagents that re-learn context; use it only on
+  request.
+- Keep the context small: fresh session per task, compaction at the
+  model's real window, no repository dumps in the prompt.
+- Host defaults `CDX_DEFAULT_MODEL` and `CDX_DEFAULT_EFFORT` apply only
+  when Claude passes no flags; the table above means Claude usually
+  passes them.
+
+Dated benchmark, cost, and community evidence behind the table:
+[references/model-routing.md](references/model-routing.md).
 
 ## Invocation contract
 
@@ -45,25 +86,15 @@ management have separate commands below. For long tasks, use Bash
   approval review. Requires `--sandbox write` on a fresh run. It routes
   approval requests to a reviewer; it does not grant blanket permission
   or bypass the sandbox.
-- **--model**: when the user names a model, pass it unchanged, including
-  `gpt-6-astra`. Otherwise choose by task using the
-  [model routing reference](references/model-routing.md): Sol for
-  planning and ambiguous work, Luna xhigh for well-briefed mechanical
-  work and fleet workers, Terra high for large-context or thin-brief
-  workers, Astra only for hard single-session tasks. Leave the flag
-  unset to inherit `CDX_DEFAULT_MODEL` from the host environment when
-  set, otherwise the user's Codex configuration. The `spark` alias maps
-  to `gpt-5.3-codex-spark`; use it when requested and available to the
-  account. A model error is not permission to substitute another.
-- **--effort**: leave unset to inherit `CDX_DEFAULT_EFFORT` or the
-  user's configuration. If selecting an override, use a level supported
-  by that model in the installed CLI. For Astra, `low` is the lighter
-  option; `none` and `minimal` are unsupported. `xhigh` is not a
-  universal maximum, and for Luna it beats `max` on cost and time at
-  equal quality. Effort changes reasoning tokens, which are a small
-  share of a request; model choice changes the per-token rate. See the
-  dated model notes in the flag map for `max` and CLI-specific `ultra`
-  availability.
+- **--model** and **--effort**: set both from the table in "Choose the
+  model first" unless the user named them; pass a user-named model
+  unchanged, including `gpt-6-astra`. Use only effort levels the
+  installed CLI supports for that model: Astra's lightest is `low`
+  (`none` and `minimal` are unsupported), Luna has no `ultra`, and
+  `xhigh` is not a universal maximum. The `spark` alias maps to
+  `gpt-5.3-codex-spark`; use it when requested and available to the
+  account. See the dated model notes in the flag map for `max` and
+  CLI-specific `ultra` availability.
 - **--fast**: request faster serving of the selected model via
   `service_tier="fast"`. It is independent of reasoning effort, so it
   can be combined with a supported high effort. Availability, latency,
@@ -109,13 +140,9 @@ usually cap at 4. Give each worker a specific deliverable and its own
 worktrees; a scratch directory isolates logs, not repository edits.
 
 Every worker resends its whole context on every turn, so a fan-out
-multiplies cost by the worker count. Unless the user named a model,
-run workers on `--model gpt-5.6-luna --effort xhigh` with a detailed
-brief (plan, acceptance criteria, file scope, verification command),
-and move a worker to `gpt-5.6-terra --effort high` when it must hold a
-large context or its brief is thin. Plan and merge with Sol. Do not fan
-out Astra. Rationale and dated evidence:
-[model routing](references/model-routing.md).
+multiplies cost by the worker count. Workers follow "Choose the model
+first": Luna xhigh with a full brief, Terra high for large-context or
+thin-brief workers, Sol for the plan and the merge, never Astra.
 
 Collect every result, resolve conflicting findings against the source,
 and synthesize one outcome. Keep dependent edits sequential.
