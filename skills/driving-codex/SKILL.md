@@ -21,10 +21,16 @@ its result. Plugin selection is a prompt requirement, not a runner flag.
 
 ## Choose the model first
 
-Codex bills a ChatGPT subscription per token of context on every turn,
-so the model's per-token rate decides cost; effort barely does. When the
-user has not named a model, pick from this table. Explicit user choices
-always win, and a model error is never permission to substitute.
+Choose the model and reasoning effort separately. If no task shape fits,
+fall back to `gpt-5.6-sol --effort medium`. Explicit user choices always win,
+and a model error is never permission to substitute.
+
+Codex subscription usage is charged on every request for input, cached input,
+and output tokens. A large context resent across many turns is usually the
+largest cost driver. Effort is not free: high effort can emit substantially
+more reasoning, especially on Luna at `xhigh` or `max` and on Astra. Model
+rates and repeated context still matter more than the effort label in most
+workflows.
 
 | Task shape | Model and effort | Why |
 |---|---|---|
@@ -34,19 +40,42 @@ always win, and a model error is never permission to substitute.
 | Fleet workers (any fan-out) | `gpt-5.6-luna --effort xhigh` per worker | Every worker resends its whole context each turn; cost scales with worker count |
 | Worker that must hold a large context (roughly 150k+) or a thin brief | `gpt-5.6-terra --effort high` | Terra retrieves from long context far better than Luna and infers intent from less |
 | Repo exploration, running checks, git operations, extraction | `gpt-5.6-luna --effort medium` | Cheap and adequate for bounded, verifiable steps |
-| Hardest single tasks the user cares about: unfamiliar systems, computer-use verification, research that must be right first time | `gpt-6-astra --effort medium` | Highest capability; drains the limit 3x to 5x faster than Sol, so one session, short context, never fanned out |
+| Hardest single technical tasks: root-cause debugging, unfamiliar systems, or demanding computer use integral to the technical work | `gpt-6-astra --effort medium` | Highest capability; reserve it for a difficulty Sol cannot reasonably handle, keep the context tight, and never fan it out |
 | Review of a diff | `gpt-5.6-sol --effort medium` with the review schema | Sol judges contract fidelity; Luna misses details |
 
 Rules that go with the table:
 
-- A Luna worker needs a brief with the plan, acceptance criteria, file
-  scope, and the verification command. Without that, use Terra high or
-  Sol. Luna takes prompts literally and can leave work half done.
-- Escalate a failing worker one step: Luna to Terra high, Terra to Sol
-  medium, Sol to Sol xhigh. Do not jump to Astra to rescue a loop.
-- Prefer `xhigh` over `max` on every model unless the user asks for
-  max. Ultra spawns subagents that re-learn context; use it only on
-  request.
+- Luna `low` is for simple extraction and exact, repeatable steps. Use
+  `medium` when the task needs several checks. Use `high` or `xhigh` for a
+  bounded implementation only when the brief includes the plan, file scope,
+  acceptance criteria, and verified commands. Review its diff for unrequested
+  edits.
+- Terra `medium` is for exploration and scans. Use `high` when the worker
+  must reconcile substantial context or wall-clock time matters more than
+  credits. Reduce irrelevant context before increasing effort or model size.
+- Sol `medium` is the ordinary setting for implementation, reviews, routine
+  navigation, authenticated browsing, course or administrative audits, and
+  tracker synchronization. Use `high` for planning, complex logic, or
+  conflicting sources, and `xhigh` for subtle debugging, concurrency,
+  security, or unresolved cross-file reasoning.
+- Reserve Astra for the most ambitious and technically difficult work. Before
+  selecting it, name the specific difficulty that Sol at an appropriate effort
+  is unlikely to handle, or cite a demonstrated capability limit after fixing
+  the brief and tools. Ambiguity, importance, many pages, authentication, or
+  computer use alone do not justify Astra. Simple site navigation, information
+  gathering, course reconciliation, and tracker updates belong on Sol or a
+  lighter model. Start at `medium`, delegate only the hard portion, and never
+  fan it out.
+- Lower effort for straightforward follow-ups. Raise it when available
+  evidence is difficult to reconcile. Inspect failures first: missing inputs,
+  invalid commands, unavailable tools, and permission blocks need those
+  problems addressed before switching models or retrying.
+- Escalate a genuinely failing worker one step: Luna to Terra `high`, Terra
+  to Sol `medium`, and Sol to Sol `xhigh`. Do not jump to Astra to rescue a
+  loop.
+- Prefer `xhigh` over `max` unless the user asks for `max`. Use `max` or
+  `ultra` only for an unusually difficult bounded problem with a clear reason,
+  or when requested. Higher effort is not a guarantee of better results.
 - Keep the context small: fresh session per task, compaction at the
   model's real window, no repository dumps in the prompt.
 - Run every fleet worker and well-briefed mechanical run with `--lean`.
@@ -66,9 +95,44 @@ Rules that go with the table:
 - Host defaults `CDX_DEFAULT_MODEL` and `CDX_DEFAULT_EFFORT` apply only
   when Claude passes no flags; the table above means Claude usually
   passes them.
+- Judge efficiency by the verified result, total input and output tokens,
+  elapsed time, retries, and review corrections, not by effort labels or
+  per-call cost alone.
 
 Dated benchmark, cost, and community evidence behind the table:
 [references/model-routing.md](references/model-routing.md).
+
+## Token, credit, and speed economics
+
+The following is a dated subscription-credit snapshot, not API-key billing.
+Treat it as a routing heuristic and recheck the installed account and model
+catalog before making a cost-sensitive choice.
+
+| Model | Input | Cached input | Output | Relative to Sol |
+|---|---:|---:|---:|---:|
+| GPT-6 Astra | 250 | 25 | 1,250 | 2.5x on paper; measured 3.3x to 4.7x against the weekly meter |
+| GPT-5.6 Sol | 100 | 10 | 500 | 1x |
+| GPT-5.6 Terra | 50 | 5 | 300 | 0.5x input, 0.6x output |
+| GPT-5.6 Luna | 5 | 0.5 | 30 | 0.05x input; high-effort reasoning can add output while remaining below Terra |
+
+Every token in the context is charged on every request. A 200k-token context
+resent 300 times can cost more than choosing a higher effort once. A local
+mechanical-run measurement of 330M input tokens, 97% cached, and 1M output
+tokens used about 22% of a Pro weekly window on Sol, about 11% on Terra, and
+under 2% on Luna even allowing three times the output. These are measurements,
+not guarantees for another account or workload.
+
+`--fast` is a paid speed tier, independent of reasoning effort and model
+quality. The current [Codex speed documentation](https://learn.chatgpt.com/docs/agent-configuration/speed)
+says Fast increases speed by 1.5x for GPT-5.6, GPT-5.5, and GPT-5.4; it also
+charges 2.5x Standard credits for GPT-5.6 and GPT-5.5, 2x for GPT-5.4, and
+2.5x for GPT-6 Astra where available. Do not enable it by habit. Use it when
+latency is worth the extra credits, and report the tier in the handoff.
+
+Fast is a ChatGPT-credit feature. With an API key, Codex uses API token
+pricing instead, and ChatGPT credit multipliers do not apply. Codex-Spark is a
+separate, faster, less-capable model with its own limits; it is not a cheaper
+Fast-mode alias or a universal fallback.
 
 ## Invocation contract
 
@@ -89,6 +153,46 @@ turn or final message.
 Use `--help` for the runner's current options. Native reviews and cloud
 management have separate commands below. For long tasks, use Bash
 `run_in_background: true` and collect the result when the process exits.
+
+## Git, sandbox, and capability claims
+
+Codex can use Git, including committing, when the selected sandbox and the
+user's authorization allow it. Never report a blanket limitation such as
+"Codex cannot commit" or "Codex cannot use Git" without direct evidence.
+
+Before reporting a blocked Git operation:
+
+1. Inspect the runner status, stderr artifact, and the command output.
+2. State whether the operation was actually attempted.
+3. Quote the exact error and classify it as a sandbox path, network,
+   authentication, repository-state, or tool failure.
+4. Distinguish a normal checkout from a managed `git worktree`.
+
+A managed worktree can keep its index and `index.lock` under the main
+repository's `.git/worktrees/<name>/`, outside the `workspace-write` root. An
+error such as `index.lock: Operation not permitted` means that the sandbox
+rejected that path. It does not mean Codex lacks commit capability. On a fresh
+run, an explicit `--add-dir <main-repo>/.git/worktrees/<name>` can authorize
+the exact metadata directory, or the orchestrator can perform the commit.
+Do not auto-expand writable roots or use a danger bypass. Resume and fork have
+narrower options, so check the runner before suggesting a flag.
+
+The same rule applies to network operations such as `git push` and `gh`:
+report a sandbox or network restriction as the cause, not as an inherent
+Codex limitation. If there is no attempted command or concrete error, report
+`not attempted` or `not verified`, never `blocked`.
+
+For any Git failure, use this reporting shape:
+
+- **Operation:** attempted or not attempted
+- **Evidence:** exact command and exact stderr or provider response
+- **Boundary:** sandbox path, network, authentication, repository state, or
+  tool failure
+- **Next step:** the action that is authorized and supported
+
+The prohibited shorthand is "Codex cannot commit." The precise form is, for
+example, "Commit was attempted, and `workspace-write` rejected the worktree's
+`index.lock` path; Codex's Git capability is not in question."
 
 ## Choosing flags
 
@@ -173,6 +277,9 @@ worktrees and scratch directories do not isolate UI state.
 - Parse schema output and inspect the runner's completion status.
 - Verify substantive claims against current source or tool evidence.
   Label findings that remain unverified.
+- Treat memory notes, prior agent prose, and screenshots as context, not as
+  proof of a capability or failure. Capability claims require current command
+  or provider evidence.
 - For a requested fix, inspect the diff and run checks appropriate to
   the change. Stop broadening verification once relevant checks pass,
   unless new evidence exposes another concern.
@@ -201,6 +308,11 @@ installed subcommand's help before composing its arguments.
 
 Read the actual error and stderr artifact before diagnosing a failed
 run. Inspect partial changes before retrying a task that could write.
+
+Do not convert a sandbox, network, authentication, or worktree metadata error
+into a claim that Codex itself cannot perform the operation. The report must
+name the attempted command, the exact error, the affected path or provider,
+and the permitted next step. If the operation was never attempted, say so.
 
 - Unsupported model, effort, or flag: check the installed CLI version,
   relevant `--help`, and current model availability. Preserve an

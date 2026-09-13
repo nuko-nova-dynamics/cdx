@@ -47,14 +47,16 @@ lists `low` through `max`. Treat `ultra` as CLI/account-dependent;
 neither `none` nor `minimal` is an Astra setting. Check current model
 metadata before choosing a level; `xhigh` is not a universal maximum.
 
-Fast mode changes serving speed independently of reasoning effort.
+Fast mode changes serving speed independently of reasoning effort, and it
+consumes additional ChatGPT credits.
 The official [Codex speed documentation](https://learn.chatgpt.com/docs/agent-configuration/speed)
-states a 1.5x speed increase for GPT-5.6, GPT-5.5, and GPT-5.4.
-For Astra it states 2.5x Standard ChatGPT credit consumption where
-available, without that speed multiplier. ChatGPT credit multipliers
-do not describe API-key billing. Fast mode may also depend on the
-`fast_mode` feature setting; inspect the active configuration if the
-requested tier is unavailable.
+states a 1.5x speed increase for GPT-5.6, GPT-5.5, and GPT-5.4, with
+2.5x Standard ChatGPT credit consumption for GPT-5.6 and GPT-5.5 and
+2x for GPT-5.4. For Astra it states 2.5x Standard ChatGPT credit
+consumption where available; do not assume the 1.5x speed multiplier applies
+to Astra. ChatGPT credit multipliers do not describe API-key billing. Fast
+mode may also depend on the `fast_mode` feature setting; inspect the active
+configuration if the requested tier is unavailable.
 
 The same source describes Spark as a separate model with its own
 limits, available to ChatGPT Pro during research preview. Do not use

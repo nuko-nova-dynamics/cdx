@@ -9,11 +9,17 @@ requests across three ChatGPT accounts. Vendor benchmarks are the
 vendor's; community results are small samples. Re-check before relying
 on a number that decides a routing change.
 
+When no more specific task shape fits, use `gpt-5.6-sol` at `medium` as the
+fallback. Choose the model first, then choose the lowest effort that can
+reconcile the available evidence.
+
 ## Cost against a ChatGPT subscription
 
 Codex meters subscription usage in credits per million tokens. Every
 token in the context is charged on every request, so a 200k context
-resent 300 times is the dominant cost; reasoning effort barely moves it.
+resent 300 times can dominate the cost. Reasoning effort often moves less
+than model and context choice, but long reasoning runs can add substantial
+output, especially on Luna at `xhigh` or `max` and on Astra.
 
 | Model | Input | Cached input | Output | Relative to Sol |
 |---|---|---|---|---|
@@ -38,12 +44,15 @@ cost 22% of a Pro weekly window on Sol. The same tokens price at about
 - **Weaknesses:** drains the subscription 3x to 5x faster than Sol per
   token in practice. The 272k window is the real window; Codex waives
   the API's above-272k surcharge but still bills every token at the base
-  rate. Not for loops that resend a large repo context hundreds of times.
+  rate. Higher effort can also produce a large reasoning trace. Not for
+  loops that resend a large repo context hundreds of times.
 - **Use when:** the task is genuinely hard, ambiguous, or high-value:
-  root-cause debugging, unfamiliar systems, tricky UI verification with
-  computer use, research that has to be right the first time.
+  root-cause debugging, unfamiliar systems, or demanding computer use that
+  is integral to the technical work. Ambiguity, importance, many pages,
+  authentication, and computer use alone do not justify Astra.
 - **Typical workflow:** one interactive or `codex exec` session at
-  medium effort, tight scope, short context. Do not fan out Astra.
+  medium effort, tight scope, short context. Name why Sol is insufficient,
+  delegate only the hard portion, and do not fan out Astra.
 
 ### GPT-5.6 Sol (`gpt-5.6-sol`)
 
@@ -116,9 +125,9 @@ cost 22% of a Pro weekly window on Sol. The same tokens price at about
    briefs: Terra high.
 4. Hard, ambiguous, or verification-heavy tasks the user cares about:
    Sol xhigh or Astra medium, one session, no fan-out.
-5. Never route by effort alone. Effort changes reasoning tokens, which
-   are under 1% of a typical Codex request; model choice changes the
-   per-token rate by 20x.
+5. Never route by effort alone. Effort changes reasoning tokens, which are
+   often under 1% of a typical request but can grow sharply on long runs;
+   model choice changes the per-token rate by about 20x.
 6. Workers run `--lean`. A 2026-09-11 Luna probe on codex-cli 0.154.0
    started at 25,115 input tokens with the user's config and 17,223
    without it, and the two MCP servers that failed to start on every
@@ -134,6 +143,20 @@ cost 22% of a Pro weekly window on Sol. The same tokens price at about
    and moved a Security section to match a group order given in the
    brief, then reported the reorder in passing and the rewrites not at
    all. Review caught it; the sentences prevent it.
+
+## Fast mode
+
+Fast is a paid serving tier, not a quality or reasoning setting. The current
+[Codex speed documentation](https://learn.chatgpt.com/docs/agent-configuration/speed)
+says it increases speed by 1.5x for GPT-5.6, GPT-5.5, and GPT-5.4, while
+charging 2.5x Standard ChatGPT credits for GPT-5.6 and GPT-5.5, 2x for
+GPT-5.4, and 2.5x for GPT-6 Astra where available. Treat the multiplier as
+account- and sign-in-dependent. With an API key, Codex uses API token pricing
+and these ChatGPT credit multipliers do not apply. Use `--fast` only when the
+latency benefit is worth the extra credits, and never describe it as free.
+
+Codex-Spark is a separate, faster, less-capable model with its own limits. It
+is not Fast mode and is not a universal fallback.
 
 The host can set `CDX_DEFAULT_MODEL` and `CDX_DEFAULT_EFFORT` in its
 environment; explicit `--model` and `--effort` flags always win.

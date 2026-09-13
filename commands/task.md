@@ -31,5 +31,13 @@ $ARGUMENTS
   resume and fork in this runner.
 - Choose other unspecified flags using the driving skill and the task's
   authorization. Use `--help` for remaining runner options.
-- After completion, verify and act on the result within the user's
-  scope, then report the outcome and session id.
+- Before launching, announce the selected model and effort with the reason.
+  If `--fast` is used, state that it is paid and include the current model
+  credit multiplier.
+- For Git or worktree tasks, report whether commit or push was attempted and
+  include the exact error before calling it blocked. Never summarize a
+  sandbox, network, or worktree metadata restriction as an inherent Codex
+  limitation.
+- After completion, verify and act on the result within the user's scope,
+  then report the outcome, session id, input/cached-input/output token counts
+  when available, elapsed time, retries, and any unverified residue.
