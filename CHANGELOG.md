@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.1 - 2026-09-13
+
+- Expand model and effort routing across the driving and prompting skills,
+  including subscription token economics, Astra usage warnings, Fast-tier
+  credit multipliers, and the Sol fallback.
+- Require evidence-based reporting for Git, worktree, sandbox, network, and
+  authentication failures so a boundary error is not misreported as a Codex
+  capability limit.
+- Make task and fleet commands report model choices, token usage, retries,
+  and unverified residue, and keep Fast mode opt-in for parallel workers.
+
 ## 0.4.0 - 2026-09-11
 
 - Add runner `--lean` for fleet workers and mechanical runs: passes
