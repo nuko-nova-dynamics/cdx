@@ -153,24 +153,24 @@ test("model and effort remain inherited unless explicitly requested", (t) => {
 });
 
 test("CDX_DEFAULT_MODEL and CDX_DEFAULT_EFFORT apply when flags are absent", (t) => {
-  const env = { CDX_DEFAULT_MODEL: "gpt-5.6-luna", CDX_DEFAULT_EFFORT: "xhigh" };
+  const env = { CDX_DEFAULT_MODEL: "gpt-6-luna", CDX_DEFAULT_EFFORT: "xhigh" };
   const r = isolatedRun(t, ["--sandbox", "ro", "--", "hello"], env);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.args[r.args.indexOf("-m") + 1], "gpt-5.6-luna");
+  assert.equal(r.args[r.args.indexOf("-m") + 1], "gpt-6-luna");
   assert.ok(r.args.includes('model_reasoning_effort="xhigh"'));
 });
 
 test("explicit --model and --effort override the host defaults", (t) => {
-  const env = { CDX_DEFAULT_MODEL: "gpt-5.6-luna", CDX_DEFAULT_EFFORT: "xhigh" };
-  const r = isolatedRun(t, ["--sandbox", "ro", "--model", "gpt-5.6-sol", "--effort", "medium", "--", "hello"], env);
+  const env = { CDX_DEFAULT_MODEL: "gpt-6-luna", CDX_DEFAULT_EFFORT: "xhigh" };
+  const r = isolatedRun(t, ["--sandbox", "ro", "--model", "gpt-6.1-sol", "--effort", "medium", "--", "hello"], env);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.args[r.args.indexOf("-m") + 1], "gpt-5.6-sol");
+  assert.equal(r.args[r.args.indexOf("-m") + 1], "gpt-6.1-sol");
   assert.ok(r.args.includes('model_reasoning_effort="medium"'));
   assert.ok(!r.args.includes('model_reasoning_effort="xhigh"'));
 });
 
 test("--local ignores CDX_DEFAULT_MODEL and an invalid CDX_DEFAULT_EFFORT is a usage error", (t) => {
-  const r = isolatedRun(t, ["--sandbox", "ro", "--local", "--", "hello"], { CDX_DEFAULT_MODEL: "gpt-5.6-luna" });
+  const r = isolatedRun(t, ["--sandbox", "ro", "--local", "--", "hello"], { CDX_DEFAULT_MODEL: "gpt-6-luna" });
   assert.equal(r.status, 0, r.stderr);
   assert.ok(!r.args.includes("-m"));
   const bad = run(["--sandbox", "ro", "--", "hello"], { CDX_DEFAULT_EFFORT: "bogus" });
@@ -178,15 +178,17 @@ test("--local ignores CDX_DEFAULT_MODEL and an invalid CDX_DEFAULT_EFFORT is a u
   assert.match(bad.stderr, /CDX_DEFAULT_EFFORT/);
 });
 
-for (const effort of ["max", "ultra"]) {
-  for (const mode of [[], ["--resume", "abc-123"], ["--fork", "abc-123"]]) {
-    test(`${effort} and explicit Astra survive ${mode[0] || "fresh"} invocation`, (t) => {
-      const r = isolatedRun(t, ["--sandbox", "ro", ...mode, "--model", "gpt-6-astra", "--effort", effort, "--fast", "--", "check"]);
-      assert.equal(r.status, 0, r.stderr);
-      assert.equal(r.args[r.args.indexOf("-m") + 1], "gpt-6-astra");
-      assert.ok(r.args.includes(`model_reasoning_effort="${effort}"`));
-      assert.ok(r.args.includes('service_tier="fast"'));
-    });
+for (const model of ["gpt-6.1-sol", "gpt-6-astra"]) {
+  for (const effort of ["max", "ultra"]) {
+    for (const mode of [[], ["--resume", "abc-123"], ["--fork", "abc-123"]]) {
+      test(`${effort} and explicit ${model} survive ${mode[0] || "fresh"} invocation`, (t) => {
+        const r = isolatedRun(t, ["--sandbox", "ro", ...mode, "--model", model, "--effort", effort, "--fast", "--", "check"]);
+        assert.equal(r.status, 0, r.stderr);
+        assert.equal(r.args[r.args.indexOf("-m") + 1], model);
+        assert.ok(r.args.includes(`model_reasoning_effort="${effort}"`));
+        assert.ok(r.args.includes('service_tier="fast"'));
+      });
+    }
   }
 }
 
@@ -291,19 +293,19 @@ test("unwritable artifact destinations fail without an unhandled stream error", 
 });
 
 test("--lean skips user config and connector apps on a fresh run", (t) => {
-  const r = isolatedRun(t, ["--sandbox", "ro", "--lean", "--model", "gpt-5.6-luna", "--effort", "xhigh", "--", "hello"]);
+  const r = isolatedRun(t, ["--sandbox", "ro", "--lean", "--model", "gpt-6-luna", "--effort", "xhigh", "--", "hello"]);
   assert.equal(r.status, 0, r.stderr);
   assert.ok(r.args.includes("--ignore-user-config"));
   assert.ok(r.args.includes("apps._default.enabled=false"));
-  assert.equal(r.args[r.args.indexOf("-m") + 1], "gpt-5.6-luna");
+  assert.equal(r.args[r.args.indexOf("-m") + 1], "gpt-6-luna");
   assert.ok(r.args.includes('model_reasoning_effort="xhigh"'));
 });
 
 test("--lean rejects continuation, --local, and a missing model", () => {
-  const resume = run(["--sandbox", "ro", "--lean", "--model", "gpt-5.6-luna", "--resume", "abc-123", "--", "more"]);
+  const resume = run(["--sandbox", "ro", "--lean", "--model", "gpt-6-luna", "--resume", "abc-123", "--", "more"]);
   assert.notEqual(resume.status, 0);
   assert.match(resume.stderr, /--lean is only supported on a fresh run/);
-  const local = run(["--sandbox", "ro", "--lean", "--local", "--model", "gpt-5.6-luna", "--", "hello"]);
+  const local = run(["--sandbox", "ro", "--lean", "--local", "--model", "gpt-6-luna", "--", "hello"]);
   assert.notEqual(local.status, 0);
   assert.match(local.stderr, /--lean cannot be combined with --local/);
   const noModel = run(["--sandbox", "ro", "--lean", "--", "hello"]);
@@ -312,8 +314,8 @@ test("--lean rejects continuation, --local, and a missing model", () => {
 });
 
 test("--lean accepts CDX_DEFAULT_MODEL in place of --model", (t) => {
-  const r = isolatedRun(t, ["--sandbox", "ro", "--lean", "--", "hello"], { CDX_DEFAULT_MODEL: "gpt-5.6-luna", CDX_DEFAULT_EFFORT: "xhigh" });
+  const r = isolatedRun(t, ["--sandbox", "ro", "--lean", "--", "hello"], { CDX_DEFAULT_MODEL: "gpt-6-luna", CDX_DEFAULT_EFFORT: "xhigh" });
   assert.equal(r.status, 0, r.stderr);
   assert.ok(r.args.includes("--ignore-user-config"));
-  assert.equal(r.args[r.args.indexOf("-m") + 1], "gpt-5.6-luna");
+  assert.equal(r.args[r.args.indexOf("-m") + 1], "gpt-6-luna");
 });

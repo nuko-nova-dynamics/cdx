@@ -1,162 +1,103 @@
 # Codex model routing
 
-Evidence reviewed on **2026-09-11**: OpenAI's GPT-5.6 launch tables
-(July 9), the July 30 price-cut post, the GPT-6 Astra launch tables
-(September 3), the Codex rate card at learn.chatgpt.com/docs/pricing,
-Artificial Analysis' Sol/Terra/Luna cost-vs-intelligence article
-(July 13), four r/codex comparison threads, and 248k local Codex
-requests across three ChatGPT accounts. Vendor benchmarks are the
-vendor's; community results are small samples. Re-check before relying
-on a number that decides a routing change.
+Evidence reviewed on **2026-09-29**: the [DevDay recap](https://openai.com/index/devday-2026-recap/),
+[GPT-6.1 Sol launch](https://openai.com/index/introducing-gpt-6-1-sol/),
+[API model card](https://developers.openai.com/api/docs/models/gpt-6.1-sol),
+[Codex pricing](https://learn.chatgpt.com/docs/pricing), and
+[Codex speed documentation](https://learn.chatgpt.com/docs/agent-configuration/speed).
+The routing choices below are this skill's policy, informed by those sources.
+Vendor evaluations do not prove a result on a particular delegated task.
 
-When no more specific task shape fits, use `gpt-5.6-sol` at `medium` as the
-fallback. Choose the model first, then choose the lowest effort that can
-reconcile the available evidence.
+Use `gpt-6.1-sol` at `medium` when no more specific task shape fits. Choose
+model and effort separately, honor explicit user choices, and check the
+installed catalog before launching. Do not route new work to Terra by default.
 
-## Cost against a ChatGPT subscription
+## Why GPT-6.1 Sol is the default
 
-Codex meters subscription usage in credits per million tokens. Every
-token in the context is charged on every request, so a 200k context
-resent 300 times can dominate the cost. Reasoning effort often moves less
-than model and context choice, but long reasoning runs can add substantial
-output, especially on Luna at `xhigh` or `max` and on Astra.
+OpenAI reports near-Astra performance on coding, computer use, and professional
+work. On DeepSWE 1.1, GPT-6.1 Sol matches Astra at roughly one-fifth the cost
+per task and improves on GPT-6 Sol's best score by 6.4 percentage points.
+Astra remains the highest-scoring model on the launch's scientific benchmark.
+These are research/API evaluations; production tools and prompts can differ.
+The launch provides no direct coding comparison with GPT-6 Luna.
 
-| Model | Input | Cached input | Output | Relative to Sol |
-|---|---|---|---|---|
-| GPT-6 Astra | 250 | 25 | 1,250 | 2.5x on paper; measured 3.3x to 4.7x against the weekly meter |
-| GPT-5.6 Sol | 100 | 10 | 500 | 1x |
-| GPT-5.6 Terra | 50 | 5 | 300 | 0.5x input, 0.6x output |
-| GPT-5.6 Luna | 5 | 0.5 | 30 | 0.05x input; Luna at xhigh or max emits far more reasoning, still well under Terra |
+Use Sol `medium` for ordinary implementation, reviews, authenticated browsing,
+and administrative work. Use `high` for planning or conflicting sources and
+`xhigh` for subtle debugging, concurrency, security, or difficult cross-file
+reasoning. A thin brief needs clarification and relevant source context;
+increasing model size does not replace them.
 
-A typical mechanical background run (330M input, 97% cached, 1M output)
-cost 22% of a Pro weekly window on Sol. The same tokens price at about
-11% on Terra and under 2% on Luna even allowing three times the output.
+## Luna and Astra
 
-## Model profiles
+`gpt-6-luna` remains the low-cost choice for exact extraction, checks, git
+operations, and bounded implementation. Use `low` for repeatable steps,
+`medium` for several checks, and `high` or `xhigh` when a clear plan, file
+scope, acceptance criteria, and verified commands support implementation.
+Review the diff for unrequested changes. GPT-5.6 Luna anecdotes do not
+establish GPT-6 Luna's performance or its best effort setting.
 
-### GPT-6 Astra (`gpt-6-astra`)
+Reserve `gpt-6-astra` for a specific technical or scientific difficulty that
+Sol at an appropriate effort is unlikely to handle, or a demonstrated
+capability limit after correcting the brief and tools. Importance, many
+pages, authentication, or computer use alone do not qualify. Start at
+`medium`, delegate only the hard portion, and never fan out Astra.
 
-- **Strengths:** highest capability on end-to-end multi-step work,
-  computer use, browsing, cybersecurity, math, and template-faithful
-  documents. Asks focused questions and holds the original goal when
-  steered mid-task. Codex keeps notes across context windows for it
-  (experimental `features.context_management`).
-- **Weaknesses:** drains the subscription 3x to 5x faster than Sol per
-  token in practice. The 272k window is the real window; Codex waives
-  the API's above-272k surcharge but still bills every token at the base
-  rate. Higher effort can also produce a large reasoning trace. Not for
-  loops that resend a large repo context hundreds of times.
-- **Use when:** the task is genuinely hard, ambiguous, or high-value:
-  root-cause debugging, unfamiliar systems, or demanding computer use that
-  is integral to the technical work. Ambiguity, importance, many pages,
-  authentication, and computer use alone do not justify Astra.
-- **Typical workflow:** one interactive or `codex exec` session at
-  medium effort, tight scope, short context. Name why Sol is insufficient,
-  delegate only the hard portion, and do not fan out Astra.
+If a Luna worker needs broader judgment, switch to Sol. Raise effort when
+the available evidence is difficult to reconcile. Missing inputs, broken
+commands, unavailable tools, and permission blocks need those problems
+addressed first. Avoid retrying every tier as a fixed escalation ladder.
 
-### GPT-5.6 Sol (`gpt-5.6-sol`)
+## Rates and context
 
-- **Strengths:** strongest GPT-5.6 tier for complex coding, deep
-  research, math, cyber, and polish. Best planner in the family:
-  Sol at high or xhigh produces plans that cheaper models can execute.
-  Reliable long-context retrieval (about 90% on the 256k to 512k needle
-  test).
-- **Weaknesses:** on OpenAI's own September tables, Claude Opus 5 beats
-  Sol on every coding row (Terminal-Bench 4.0 52.6 vs 37.3, FrontierCode
-  53.4 vs 47.5, coding-agent index 68.1 vs 65.1). Community reports of
-  over-engineering, validation loops, and ignoring explicit
-  instructions at high effort. Costs 20x Luna per token.
-- **Use when:** planning and decomposition, ambiguous or cross-cutting
-  changes, subtle debugging, security or concurrency work, and as the
-  fallback when Terra or Luna fails twice.
-- **Typical workflow:** Sol high or xhigh writes the plan and acceptance
-  criteria; cheaper workers implement; Sol medium reviews or resolves
-  disagreements. Sol low is a fast, cheap iteration mode that many
-  users prefer to Terra high at similar cost.
+The skill body lists the current Standard credit rates. GPT-6.1 Sol keeps
+GPT-6 Sol's input/output rates and halves its cached-input rate. API prices,
+purchased credits, and included subscription limits are different measures;
+old weekly-meter estimates do not predict this release's allowance usage.
 
-### GPT-5.6 Terra (`gpt-5.6-terra`)
+The API model card lists a 1,050,000-token context window and 128,000 maximum
+output. Above 272,000 input tokens, API pricing
+increases for the entire request: input and cache rates double, and output
+rates increase by 1.5x. That threshold is a price boundary, not the context
+limit. Use the installed Codex catalog's effective window and compaction
+settings for CLI sessions; do not apply API limits or surcharges to Codex
+subscription usage without checking its documentation.
 
-- **Strengths:** fast (community measurements of 3x to 4x shorter
-  wall-clock than Luna xhigh on the same task), stays in scope, good
-  long-context retrieval (89.6% on the 256k to 512k needle test vs Luna
-  41.3%), and better than Luna at unstructured extraction and
-  under-specified tasks. OpenAI positions it as the GPT-5.5
-  replacement at half the cost.
-- **Weaknesses:** dominated on cost-per-intelligence. Artificial
-  Analysis: for any Terra effort level there is a Luna or Sol level
-  that is as smart for less. One to three points behind Sol on coding
-  benchmarks and far behind on hard reasoning, computer use, and
-  cyber. Community reports of "done" summaries that leave part of a
-  large contract unimplemented.
-- **Use when:** a worker must hold a very large context, the brief is
-  thin and the model has to infer intent, or wall-clock matters more
-  than credits. Terra high is the common daily-driver setting among
-  its defenders.
-- **Typical workflow:** implementation worker for medium-sized, well
-  scoped changes when Luna proves too literal; review-repair pass over
-  Luna output; server or infra configuration.
+GPT-6.1 Sol supports `low`, `medium`, `high`, `xhigh`, and `max` in the public
+API; `none` and `minimal` are unsupported. The local codex-cli 0.159.0 catalog
+inspected on 2026-09-29 also advertised `ultra` for Sol and Astra, but not
+Luna. Recheck the current catalog; `ultra` is a CLI/account setting, and
+higher effort does not guarantee a better result. Tool calling on GPT-6.1 Sol
+uses the Responses API; Chat Completions supports it without tools.
 
-### GPT-5.6 Luna (`gpt-5.6-luna`)
+## Worker context and briefs
 
-- **Strengths:** cheapest by an order of magnitude. Coding-agent
-  benchmarks within a few points of Terra. In a community trial with a
-  detailed 11-story plan, Luna xhigh finished 3 of 3 runs defect-free at
-  $0.59 while Terra medium and Sol medium each finished 0 of 3.
-- **Weaknesses:** weak long-context retrieval, takes prompts literally,
-  misses small details, and can leave tasks half done without a
-  detailed plan. Slow at xhigh and max because it emits large reasoning
-  traces (one measurement: 97% of output). Luna max regresses relative
-  to xhigh in several reports: same quality, 40% more cost and time,
-  more over-thinking. Not available through `spawn_agent` in some CLI
-  versions.
-- **Use when:** the plan is detailed and verifiable, the change is
-  bounded, and a review pass follows. Repo exploration, test runs,
-  git operations, and mechanical edits.
-- **Typical workflow:** Luna xhigh as the default fleet worker with a
-  Sol-authored plan, acceptance criteria, and file scope in the prompt;
-  Terra high or Sol medium reviews the diff. Prefer xhigh over max.
+Use a fresh session and concise source pointers for each independent worker.
+Mechanical workers use `--lean`; browser, app, and MCP-dependent workers
+need the full configuration. The flag-map reference documents what `--lean`
+retains. A local 2026-09-11 probe on codex-cli 0.154.0 reduced initial input
+from 25,115 to 17,223 tokens without user configuration. This is a dated
+context measurement, not a GPT-6.1 cost or quality benchmark.
 
-## Routing rules the skill applies
+Brief each worker with the goal, allowed files, acceptance criteria, and
+verified checks. Scope style and ordering rules to prose being added or
+intentionally revised, preserve unrelated text, and require a list of changed
+files and any edits beyond the brief. Select each worker separately; use
+Luna for bounded work and Sol when it needs broader judgment. Judge total
+efficiency by verified results, tokens, time, retries, and review corrections.
 
-1. Planning, decomposition, and the final merge decision: Sol high.
-2. Fleet workers and mechanical background loops: Luna xhigh with a
-   detailed brief. Escalate a failing worker to Terra high, then Sol.
-3. Workers that must hold more than roughly 150k of context, or thin
-   briefs: Terra high.
-4. Hard, ambiguous, or verification-heavy tasks the user cares about:
-   Sol xhigh or Astra medium, one session, no fan-out.
-5. Never route by effort alone. Effort changes reasoning tokens, which are
-   often under 1% of a typical request but can grow sharply on long runs;
-   model choice changes the per-token rate by about 20x.
-6. Workers run `--lean`. A 2026-09-11 Luna probe on codex-cli 0.154.0
-   started at 25,115 input tokens with the user's config and 17,223
-   without it, and the two MCP servers that failed to start on every
-   normal run were gone. The remaining constant is `$CODEX_HOME/AGENTS.md`,
-   which still loads; keep it short and scope writing-style rules to
-   prose deliverables so workers do not read a writing skill before a
-   code change.
-7. A Luna brief carries three guard sentences: style and ordering rules
-   apply only to lines you add; do not modify any line you were not
-   asked to change; list every hunk you touched in the final message.
-   Observed 2026-09-11: a Luna xhigh worker asked to delete a route
-   also rewrote two historical changelog entries to remove em dashes
-   and moved a Security section to match a group order given in the
-   brief, then reported the reorder in passing and the rewrites not at
-   all. Review caught it; the sentences prevent it.
+## Speed tiers
 
-## Fast mode
+Standard and Fast are available for GPT-6.1 Sol where the account and client
+support them. `--fast` sets `service_tier="fast"`; it does not select Ultrafast
+or change reasoning effort. Fast's included-subscription and purchased-credit
+rates differ, as documented in the skill body's economics section. No fixed
+GPT-6.1 Sol throughput or task-completion multiplier is established here.
 
-Fast is a paid serving tier, not a quality or reasoning setting. The current
-[Codex speed documentation](https://learn.chatgpt.com/docs/agent-configuration/speed)
-says it increases speed by 1.5x for GPT-5.6, GPT-5.5, and GPT-5.4, while
-charging 2.5x Standard ChatGPT credits for GPT-5.6 and GPT-5.5, 2x for
-GPT-5.4, and 2.5x for GPT-6 Astra where available. Treat the multiplier as
-account- and sign-in-dependent. With an API key, Codex uses API token pricing
-and these ChatGPT credit multipliers do not apply. Use `--fast` only when the
-latency benefit is worth the extra credits, and never describe it as free.
-
-Codex-Spark is a separate, faster, less-capable model with its own limits. It
-is not Fast mode and is not a universal fallback.
+The DevDay announcement says GPT-6.1 Sol Ultrafast is coming soon. Astra
+Ultrafast is available on eligible plans; token-generation speed claims do
+not measure total task time. Check current availability before requesting
+either tier. Codex-Spark is a separate model, not a Fast-mode alias.
 
 The host can set `CDX_DEFAULT_MODEL` and `CDX_DEFAULT_EFFORT` in its
-environment; explicit `--model` and `--effort` flags always win.
+environment; explicit runner flags win. Updating this policy does not change
+those settings or the user's selected main-session model.

@@ -40,23 +40,25 @@ its own subset. Choose model and effort from the skill's "Choose the
 model first" table unless the user named them; unset flags fall back to
 `CDX_DEFAULT_MODEL` / `CDX_DEFAULT_EFFORT`, then the user's configuration.
 
-The Astra entry in the local CLI model catalog inspected on 2026-09-05
-advertised `low`, `medium`, `high`, `xhigh`, `max`, and `ultra`.
-The public [Astra API model page](https://developers.openai.com/api/docs/models/gpt-6-astra)
-lists `low` through `max`. Treat `ultra` as CLI/account-dependent;
-neither `none` nor `minimal` is an Astra setting. Check current model
-metadata before choosing a level; `xhigh` is not a universal maximum.
+The local codex-cli 0.159.0 catalog inspected on 2026-09-29 advertised `low`,
+`medium`, `high`, `xhigh`, `max`, and `ultra` for `gpt-6.1-sol` and Astra.
+Luna advertised `low` through `max` without `ultra`. The public
+[GPT-6.1 Sol API model card](https://developers.openai.com/api/docs/models/gpt-6.1-sol)
+lists `low` through `max`, with `medium` as its API default; `none` and
+`minimal` are unsupported. Treat `ultra` as CLI/account-dependent and recheck
+the live catalog. `xhigh` is not a universal maximum.
 
-Fast mode changes serving speed independently of reasoning effort, and it
-consumes additional ChatGPT credits.
-The official [Codex speed documentation](https://learn.chatgpt.com/docs/agent-configuration/speed)
-states a 1.5x speed increase for GPT-5.6, GPT-5.5, and GPT-5.4, with
-2.5x Standard ChatGPT credit consumption for GPT-5.6 and GPT-5.5 and
-2x for GPT-5.4. For Astra it states 2.5x Standard ChatGPT credit
-consumption where available; do not assume the 1.5x speed multiplier applies
-to Astra. ChatGPT credit multipliers do not describe API-key billing. Fast
-mode may also depend on the `fast_mode` feature setting; inspect the active
-configuration if the requested tier is unavailable.
+The [Codex speed documentation](https://learn.chatgpt.com/docs/agent-configuration/speed)
+lists Standard and Fast for GPT-6.1 Sol where available. Fast uses included
+subscription limits at 2.5x Standard, or purchased credits and Enterprise
+pay-as-you-go usage at 2x. These billing multipliers do not describe speed or
+API-key billing. Access depends on the model, account, client, and rollout;
+Fast may also require `features.fast_mode=true` in the active configuration.
+
+GPT-6.1 Sol Ultrafast is coming soon as of 2026-09-29, according to the
+[DevDay announcement](https://openai.com/index/devday-2026-recap/). Astra
+Ultrafast is a separate tier on eligible plans. This runner exposes Fast
+only; `--fast` does not request Ultrafast. Neither tier changes effort.
 
 The same source describes Spark as a separate model with its own
 limits, available to ChatGPT Pro during research preview. Do not use
