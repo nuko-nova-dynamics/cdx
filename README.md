@@ -115,26 +115,34 @@ the host environment (for example the `env` block of Claude Code's
 `settings.json`) to change the default without touching `config.toml`; explicit
 flags still win.
 
-When no model is named, Claude routes by task: Sol plans and merges, Luna
-xhigh runs well-briefed mechanical work and fleet workers, Terra high takes
-large-context or thin-brief workers, and Astra is reserved for hard
-single-session tasks. Workers run with `--lean`, which starts Codex without
-your `config.toml` (MCP servers, connector apps, hooks, personality, context
-overrides) while auth, the repository `AGENTS.md`, and `.rules` still load;
-it needs an explicit model and is not available on resume, fork, or `--local`. The reasoning, with dated benchmark and cost evidence,
-is in the [model routing reference](skills/driving-codex/references/model-routing.md).
+When no model is named, Claude routes ordinary work and reviews to
+`gpt-6.1-sol` at medium, planning to Sol high, and difficult reasoning to
+Sol xhigh. GPT-6 Luna handles bounded checks and implementation with a complete
+brief; Astra is reserved for a specific difficulty Sol is unlikely to handle.
+New work does not default to Terra. Each fleet worker gets its own model and
+effort choice. These are routing policies informed by the
+[September 29 launch](https://openai.com/index/introducing-gpt-6-1-sol/),
+not a benchmark guarantee for your task.
+
+Mechanical workers use `--lean`, which starts Codex without your
+`config.toml` (MCP servers, connector apps, hooks, personality, context
+overrides) while auth, repository `AGENTS.md`, and `.rules` still load.
+It needs an explicit model and is unavailable on resume, fork, or `--local`.
+Tasks needing UI plugins or MCP servers keep the full configuration. See the
+[model routing reference](skills/driving-codex/references/model-routing.md).
 
 ```bash
-node scripts/codex-run.mjs --sandbox ro --model gpt-6-astra --effort max -- "Review this repository"
+node scripts/codex-run.mjs --sandbox ro --model gpt-6.1-sol --effort medium -- "Review this repository"
 node scripts/codex-run.mjs --sandbox ro --fork <session-id>
 ```
 
-Reasoning levels are model-dependent. The current Astra CLI catalog offers
-`low`, `medium`, `high`, `xhigh`, `max`, and `ultra`; Ultra also enables automatic
-delegation. Use `low` instead of `none` or `minimal` for Astra. Fast tier changes
-serving speed and usage independently of effort; availability and rates depend
-on the selected model and sign-in method. See the maintained
-[flag reference](skills/driving-codex/references/flag-map.md).
+Reasoning levels depend on the model. GPT-6.1 Sol's API supports `low`,
+`medium`, `high`, `xhigh`, and `max`; neither `none` nor `minimal` is supported.
+Use CLI-specific `ultra` only when the live catalog supports it. Luna has no
+`ultra`. Fast and Ultrafast are serving tiers, separate from effort. The runner's
+`--fast` requests paid Fast serving only; Sol Ultrafast is coming soon as of
+September 29. See the [flag reference](skills/driving-codex/references/flag-map.md)
+for catalog and billing distinctions.
 
 ## Safety model
 
@@ -156,7 +164,7 @@ on the selected model and sign-in method. See the maintained
 ```bash
 node --test tests/*.test.mjs   # unit tests (stub codex, free)
 bash tests/smoke.sh            # real Codex calls using your configured model
-CDX_SMOKE_MODEL=gpt-6-astra CDX_SMOKE_EFFORT=low bash tests/smoke.sh
+CDX_SMOKE_MODEL=gpt-6.1-sol CDX_SMOKE_EFFORT=low bash tests/smoke.sh
 ```
 
 The live smoke covers structured output, session recall, fork creation and

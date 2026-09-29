@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.2 - 2026-09-29
+
+- Route ordinary work, planning, and reviews to GPT-6.1 Sol; keep GPT-6 Luna
+  for bounded workers and Astra for specific hard technical or scientific work.
+  Remove Terra from default routing and escalation.
+- Refresh official model, credit, context, reasoning, and speed evidence.
+  Distinguish public API limits from the Codex catalog, Fast from Ultrafast,
+  and purchased-credit rates from included subscription usage.
+- Keep model IDs and supported efforts explicit across skills and commands,
+  with runner coverage and live checks for GPT-6.1 Sol.
+
 ## 0.4.1 - 2026-09-13
 
 - Expand model and effort routing across the driving and prompting skills,

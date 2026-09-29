@@ -22,7 +22,7 @@ its result. Plugin selection is a prompt requirement, not a runner flag.
 ## Choose the model first
 
 Choose the model and reasoning effort separately. If no task shape fits,
-fall back to `gpt-5.6-sol --effort medium`. Explicit user choices always win,
+fall back to `gpt-6.1-sol --effort medium`. Explicit user choices always win,
 and a model error is never permission to substitute.
 
 Codex subscription usage is charged on every request for input, cached input,
@@ -34,14 +34,15 @@ workflows.
 
 | Task shape | Model and effort | Why |
 |---|---|---|
-| Planning, decomposition, architecture, final merge decision | `gpt-5.6-sol --effort high` | Best planner in the family; its plans let cheaper models execute |
-| Ambiguous, cross-cutting, subtle debugging, security, concurrency | `gpt-5.6-sol --effort xhigh` | Needs judgment; Sol handles it at a fifth of Astra's cost |
-| Well-briefed implementation, mechanical edits, tests, refactors with a plan | `gpt-5.6-luna --effort xhigh` | Matches Terra on coding benchmarks at a tenth of the cost; xhigh beats max |
-| Fleet workers (any fan-out) | `gpt-5.6-luna --effort xhigh` per worker | Every worker resends its whole context each turn; cost scales with worker count |
-| Worker that must hold a large context (roughly 150k+) or a thin brief | `gpt-5.6-terra --effort high` | Terra retrieves from long context far better than Luna and infers intent from less |
-| Repo exploration, running checks, git operations, extraction | `gpt-5.6-luna --effort medium` | Cheap and adequate for bounded, verifiable steps |
-| Hardest single technical tasks: root-cause debugging, unfamiliar systems, or demanding computer use integral to the technical work | `gpt-6-astra --effort medium` | Highest capability; reserve it for a difficulty Sol cannot reasonably handle, keep the context tight, and never fan it out |
-| Review of a diff | `gpt-5.6-sol --effort medium` with the review schema | Sol judges contract fidelity; Luna misses details |
+| Ordinary implementation, authenticated browsing, administrative work | `gpt-6.1-sol --effort medium` | Default for work that needs judgment across several steps |
+| Planning, decomposition, architecture, final merge decision | `gpt-6.1-sol --effort high` | Reconcile constraints and give bounded workers a clear plan |
+| Subtle debugging, security, concurrency, unresolved cross-file reasoning | `gpt-6.1-sol --effort xhigh` | Spend more reasoning on the specific difficulty |
+| Well-briefed implementation, mechanical edits, tests, refactors with a plan | `gpt-6-luna --effort high` or `xhigh` | Lower token rates for bounded work that can be verified and reviewed |
+| Fleet workers | `gpt-6-luna --effort medium` for checks; `high` or `xhigh` for bounded implementation | Select each worker separately; use Sol when it needs broader judgment |
+| Large-context or under-specified work | `gpt-6.1-sol --effort medium` or `high` | Clarify the brief and trim irrelevant context before launching |
+| Repo exploration, running checks, git operations, extraction | `gpt-6-luna --effort low` or `medium` | Low for exact steps; medium for several checks |
+| Hardest technical or scientific tasks beyond Sol's demonstrated capability | `gpt-6-astra --effort medium` | Delegate only the hard portion, keep the context tight, and never fan it out |
+| Review of a diff | `gpt-6.1-sol --effort medium` with the review schema | Inspect contract fidelity and resolve findings against source |
 
 Rules that go with the table:
 
@@ -50,9 +51,8 @@ Rules that go with the table:
   bounded implementation only when the brief includes the plan, file scope,
   acceptance criteria, and verified commands. Review its diff for unrequested
   edits.
-- Terra `medium` is for exploration and scans. Use `high` when the worker
-  must reconcile substantial context or wall-clock time matters more than
-  credits. Reduce irrelevant context before increasing effort or model size.
+- Sol means `gpt-6.1-sol`; Luna means `gpt-6-luna`. Do not route new work
+  to Terra or an older Sol/Luna by default. Explicit user choices still win.
 - Sol `medium` is the ordinary setting for implementation, reviews, routine
   navigation, authenticated browsing, course or administrative audits, and
   tracker synchronization. Use `high` for planning, complex logic, or
@@ -70,9 +70,10 @@ Rules that go with the table:
   evidence is difficult to reconcile. Inspect failures first: missing inputs,
   invalid commands, unavailable tools, and permission blocks need those
   problems addressed before switching models or retrying.
-- Escalate a genuinely failing worker one step: Luna to Terra `high`, Terra
-  to Sol `medium`, and Sol to Sol `xhigh`. Do not jump to Astra to rescue a
-  loop.
+- Switch a failing Luna worker to Sol when the task needs broader judgment.
+  Raise Sol's effort when the evidence is available but difficult to reconcile.
+  Address missing inputs or broken tools first; do not retry every tier or
+  use Astra to rescue a loop.
 - Prefer `xhigh` over `max` unless the user asks for `max`. Use `max` or
   `ultra` only for an unusually difficult bounded problem with a clear reason,
   or when requested. Higher effort is not a guarantee of better results.
@@ -99,40 +100,38 @@ Rules that go with the table:
   elapsed time, retries, and review corrections, not by effort labels or
   per-call cost alone.
 
-Dated benchmark, cost, and community evidence behind the table:
+Dated official evidence and routing rationale behind the table:
 [references/model-routing.md](references/model-routing.md).
 
 ## Token, credit, and speed economics
 
-The following is a dated subscription-credit snapshot, not API-key billing.
-Treat it as a routing heuristic and recheck the installed account and model
-catalog before making a cost-sensitive choice.
+These Standard rates are credits per million tokens from the
+[Codex rate card](https://learn.chatgpt.com/docs/pricing), checked on
+2026-09-29. API billing and included subscription usage are separate;
+the rate ratios do not predict a weekly allowance's depletion.
 
-| Model | Input | Cached input | Output | Relative to Sol |
+| Model | Input | Cached input | Output | Relative to GPT-6.1 Sol |
 |---|---:|---:|---:|---:|
-| GPT-6 Astra | 250 | 25 | 1,250 | 2.5x on paper; measured 3.3x to 4.7x against the weekly meter |
-| GPT-5.6 Sol | 100 | 10 | 500 | 1x |
-| GPT-5.6 Terra | 50 | 5 | 300 | 0.5x input, 0.6x output |
-| GPT-5.6 Luna | 5 | 0.5 | 30 | 0.05x input; high-effort reasoning can add output while remaining below Terra |
+| GPT-6 Astra | 250 | 25 | 1,250 | 5x input/output; 10x cached input |
+| GPT-6.1 Sol | 50 | 2.5 | 250 | 1x |
+| GPT-6 Luna | 2.5 | 0.25 | 12.5 | 0.05x input/output; 0.1x cached input |
 
-Every token in the context is charged on every request. A 200k-token context
-resent 300 times can cost more than choosing a higher effort once. A local
-mechanical-run measurement of 330M input tokens, 97% cached, and 1M output
-tokens used about 22% of a Pro weekly window on Sol, about 11% on Terra, and
-under 2% on Luna even allowing three times the output. These are measurements,
-not guarantees for another account or workload.
+Repeated context and reasoning output both affect total usage. Measure actual
+tokens, elapsed time, retries, and review corrections before concluding that
+a model or effort is cheaper for the completed task. Older GPT-5.6 measurements
+do not establish GPT-6.1 performance or subscription consumption.
 
 `--fast` is a paid speed tier, independent of reasoning effort and model
-quality. The current [Codex speed documentation](https://learn.chatgpt.com/docs/agent-configuration/speed)
-says Fast increases speed by 1.5x for GPT-5.6, GPT-5.5, and GPT-5.4; it also
-charges 2.5x Standard credits for GPT-5.6 and GPT-5.5, 2x for GPT-5.4, and
-2.5x for GPT-6 Astra where available. Do not enable it by habit. Use it when
-latency is worth the extra credits, and report the tier in the handoff.
+quality. The [Codex speed documentation](https://learn.chatgpt.com/docs/agent-configuration/speed)
+lists GPT-6.1 Sol, GPT-6 Sol/Luna, and Astra where supported. Fast uses included
+subscription limits at 2.5x Standard and purchased credits or Enterprise
+pay-as-you-go usage at 2x. These are billing multipliers, not task-speed
+guarantees. Report the tier in the handoff. GPT-6.1 Sol Ultrafast is coming
+soon as of 2026-09-29; `--fast` selects Fast only.
 
-Fast is a ChatGPT-credit feature. With an API key, Codex uses API token
-pricing instead, and ChatGPT credit multipliers do not apply. Codex-Spark is a
-separate, faster, less-capable model with its own limits; it is not a cheaper
-Fast-mode alias or a universal fallback.
+With an API key, Codex uses API token pricing and ChatGPT credit multipliers
+do not apply. Codex-Spark is a separate model with its own limits; preserve
+an explicit request for it and check account availability.
 
 ## Invocation contract
 
@@ -207,7 +206,7 @@ example, "Commit was attempted, and `workspace-write` rejected the worktree's
 - **--model** and **--effort**: set both from the table in "Choose the
   model first" unless the user named them; pass a user-named model
   unchanged, including `gpt-6-astra`. Use only effort levels the
-  installed CLI supports for that model: Astra's lightest is `low`
+  installed CLI supports for that model: GPT-6.1 Sol and Astra start at `low`
   (`none` and `minimal` are unsupported), Luna has no `ultra`, and
   `xhigh` is not a universal maximum. The `spark` alias maps to
   `gpt-5.3-codex-spark`; use it when requested and available to the
@@ -260,12 +259,12 @@ usually cap at 4. Give each worker a specific deliverable and its own
 `--scratch` directory. For writes, use disjoint file scopes or isolated
 worktrees; a scratch directory isolates logs, not repository edits.
 
-Every worker resends its whole context on every turn, so a fan-out
-multiplies cost by the worker count. Workers follow "Choose the model
-first": `--lean`, Luna xhigh with a full brief, Terra high for
-large-context or thin-brief workers, Sol for the plan and the merge,
-never Astra. Workers that operate a browser, desktop app, or MCP server
-run without `--lean` and one at a time.
+Every worker resends its context on each turn, so more workers add usage.
+Choose each worker's model and effort from "Choose the model first":
+Luna for bounded work with a full brief, Sol for broader judgment, planning,
+review, and merging. Never fan out Astra. Use `--lean` for mechanical workers;
+workers that need a browser, desktop app, or MCP server run with the full
+configuration. Serialize workers sharing UI state.
 
 Collect every result, resolve conflicting findings against the source,
 and synthesize one outcome. Keep dependent edits sequential.

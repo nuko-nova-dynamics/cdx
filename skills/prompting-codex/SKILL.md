@@ -11,44 +11,31 @@ boundaries clearer; tags and a fixed collection of blocks are optional.
 
 ## Model and budget handoff
 
-Choose the model first and reasoning effort second. If no task shape is a
-clear fit, use `gpt-5.6-sol` at `medium`. The handoff must name the selected
-model, effort, and one-sentence reason before the runner starts.
+Choose model and effort separately using `cdx:driving-codex`. If no task shape
+fits, use `gpt-6.1-sol` at `medium`. Name the model, effort, and reason before
+launching. Sol handles ordinary implementation, review, and authenticated
+browsing; `high` supports planning and conflicting evidence, and `xhigh`
+supports difficult debugging or cross-file reasoning.
 
-- Luna `low` is for simple extraction and exact, repeatable steps; use
-  `medium` for several checks and `high` or `xhigh` for a bounded
-  implementation with a complete brief. It is cheap but literal and weaker
-  on long context, so include the plan, scope, acceptance criteria, and exact
-  verification command, then review the diff.
-- Terra `medium` is for exploration and scans. Use `high` when the worker
-  must reconcile substantial context or wall-clock time matters more than
-  credits. Reduce irrelevant context before increasing effort or model size.
-- Sol `medium` is the ordinary setting for implementation, review, routine
-  navigation, authenticated browsing, course or administrative audits, and
-  tracker synchronization. Use `high` for planning, complex logic, or
-  conflicting sources, and `xhigh` for subtle debugging, concurrency,
-  security, or unresolved cross-file reasoning.
-- Astra is reserved for a specific hard technical difficulty that Sol at an
-  appropriate effort is unlikely to handle. Importance, ambiguity, many
-  pages, authentication, or computer use alone are not enough. Simple site
-  navigation, information gathering, course reconciliation, and tracker
-  updates belong on Sol or a lighter model. Start at `medium`, keep the
-  context tight, delegate only the hard portion, and never fan it out. Astra
-  can consume the weekly allowance roughly 3x to 5x faster than Sol in
-  practice.
-- Use lower effort for straightforward follow-ups. Inspect failures before
-  raising effort or changing models. Escalate a genuine failure one step:
-  Luna to Terra `high`, Terra to Sol `medium`, and Sol to Sol `xhigh`; do not
-  use Astra as a rescue loop.
-- Every input, cached-input, and output token is charged on every request.
-  Repeated large context can cost more than one higher-effort turn. `--fast`
-  is a paid speed tier independent of effort: 2.5x credits for GPT-5.6 and
-  GPT-5.5, 2x for GPT-5.4, and 2.5x for Astra where available. Use it only
-  when latency is worth the extra credits, and state the tier. API-key runs
-  use API pricing, so ChatGPT credit multipliers do not apply. Treat these as
-  a current subscription snapshot and recheck the account and model catalog
-  before making a cost-sensitive choice; see the [current Codex speed
-  documentation](https://learn.chatgpt.com/docs/agent-configuration/speed).
+Use `gpt-6-luna` for bounded work: `low` for exact steps, `medium` for several
+checks, and `high` or `xhigh` for implementation with a plan, file scope,
+acceptance criteria, and verified commands. Review its diff. Move to Sol when
+the task needs broader judgment. Do not route new work to Terra by default;
+explicit user choices still win.
+
+Reserve `gpt-6-astra` for a specific hard technical or scientific difficulty
+that Sol at an appropriate effort is unlikely to handle. Start at `medium`,
+keep context tight, delegate only the hard portion, and never fan it out.
+Importance, many pages, authentication, or computer use alone do not qualify.
+Inspect failures before changing model or effort; missing inputs and broken
+tools need correction first.
+
+GPT-6.1 Sol's public API supports `low` through `max`, excluding `none` and
+`minimal`. Use CLI-specific `ultra` only when the live catalog supports it;
+Luna has no `ultra`. Effort and speed tier are separate choices. `--fast`
+selects paid Fast serving; GPT-6.1 Sol Ultrafast is coming soon as of
+2026-09-29. For current credit rates, billing differences, and source links,
+read the driving skill's economics section and model-routing reference.
 
 ## Compose the task
 
@@ -67,8 +54,7 @@ model, effort, and one-sentence reason before the runner starts.
   use a supported level from the driving skill's flag map.
 - Match the brief to the model chosen by the driving skill's routing
   table. A Luna worker needs the plan, acceptance criteria, file scope,
-  and verification command spelled out; it follows instructions
-  literally and will not infer missing pieces. Sol and Astra can take a
+  and verification command spelled out; use that brief to make the result verifiable. Sol and Astra can take a
   thinner brief and resolve routine gaps themselves, so give them the
   goal and constraints rather than a step list.
 - Every worker brief ends with three sentences: style and ordering

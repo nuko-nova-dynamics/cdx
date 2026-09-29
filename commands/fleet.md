@@ -12,7 +12,7 @@ $ARGUMENTS
 - With `--angles`, one worker per angle (each `--sandbox ro`, reporting via `--schema ${CLAUDE_PLUGIN_ROOT}/schemas/task-report.schema.json` or review-findings for review angles).
 - Without `--angles`, decompose the task into non-overlapping subtasks; mutating workers get `--sandbox write` and disjoint file scopes or isolated worktrees stated explicitly in their prompts.
 - Launch every worker with Bash `run_in_background: true`, each with its own `--scratch` dir under the session scratchpad.
-- A scratch directory isolates logs, not edits. Unless the user named a model, give workers `--lean --model gpt-5.6-luna --effort xhigh` with a detailed brief; use `gpt-5.6-terra --effort high` for a worker that needs a large context or has a thin brief. Drop `--lean` only for a worker that needs an MCP server or a UI plugin. Fan-outs multiply cost by the worker count, so never fan out Astra. See the skill's model routing reference.
+- A scratch directory isolates logs, not edits. Unless the user named a model, choose each worker separately: `--lean --model gpt-6-luna --effort medium` for checks, `high` or `xhigh` for bounded implementation with a full brief, and `gpt-6.1-sol --effort medium` or `high` when broader judgment is needed. Drop `--lean` only for a worker that needs an MCP server or a UI plugin. Fan-outs multiply cost by the worker count, so never fan out Astra. See the skill's model routing reference.
 - Do not add `--fast` by habit. It is a paid speed tier with model-specific
   credit multipliers; if used, report the tier and aggregate token counts for
   the workers.
