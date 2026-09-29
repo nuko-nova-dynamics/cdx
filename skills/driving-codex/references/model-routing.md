@@ -54,8 +54,8 @@ GPT-6 Sol's input/output rates and halves its cached-input rate. API prices,
 purchased credits, and included subscription limits are different measures;
 old weekly-meter estimates do not predict this release's allowance usage.
 
-The API model card lists a 1,050,000-token context window, with 922,000 maximum
-input and 128,000 maximum output. Above 272,000 input tokens, API pricing
+The API model card lists a 1,050,000-token context window and 128,000 maximum
+output. Above 272,000 input tokens, API pricing
 increases for the entire request: input and cache rates double, and output
 rates increase by 1.5x. That threshold is a price boundary, not the context
 limit. Use the installed Codex catalog's effective window and compaction

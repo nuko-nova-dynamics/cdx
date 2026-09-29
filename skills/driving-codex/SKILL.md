@@ -83,16 +83,16 @@ Rules that go with the table:
   It starts Codex without the user's `config.toml` (MCP servers,
   connector apps, hooks, personality, context overrides) while auth,
   the repository `AGENTS.md`, and execpolicy rules still load. Measured
-  on a Luna probe it cut the first-request context from 25.1k to 17.2k
+  on a 2026-09-11 GPT-5.6 Luna probe it cut first-request context from 25.1k to 17.2k
   tokens and removed MCP startup errors. `--lean` needs an explicit
   model and effort and is not available on resume, fork, or `--local`.
   Keep the full config for planning and review sessions, anything that
   needs Computer Use, Chrome, a browser profile, or an MCP server, and
   for the user's own interactive work.
-- A Luna brief also states: style and ordering rules apply only to
-  lines you add; do not modify any line you were not asked to change;
-  list every hunk you touched in the final message. Luna applies
-  file-wide rules to neighbouring text otherwise.
+- A worker brief scopes style and ordering rules to prose being added or
+  intentionally revised, preserves unrelated text, and requires disclosure
+  of every changed file and any edits beyond the brief. Review the result
+  against that scope.
 - Host defaults `CDX_DEFAULT_MODEL` and `CDX_DEFAULT_EFFORT` apply only
   when Claude passes no flags; the table above means Claude usually
   passes them.
