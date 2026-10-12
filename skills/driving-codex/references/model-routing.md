@@ -62,6 +62,18 @@ limit. Use the installed Codex catalog's effective window and compaction
 settings for CLI sessions; do not apply API limits or surcharges to Codex
 subscription usage without checking its documentation.
 
+In Codex, GPT-6.1 Sol's default window rose from 272,000 to 500,000 tokens on
+2026-10-11. OpenAI's Codex lead announced the change and said long-context
+fees do not apply when Sol draws from the subscription. The live catalog read
+by codex-cli 0.162.1 on 2026-10-12 lists `context_window` 500,000,
+`max_context_window` 872,000, and 95% effective, which leaves 475,000 usable
+tokens. Other models stay at 272,000. The 0.162.1 bundled catalog still says
+272,000 for Sol. A session that does not load the live catalog, such as one
+on a custom `model_provider`, gets the old window unless a
+`model_catalog_json` override supplies the new one. Check the
+`codex debug models` output for the provider in use rather than assuming
+either figure.
+
 GPT-6.1 Sol supports `low`, `medium`, `high`, `xhigh`, and `max` in the public
 API; `none` and `minimal` are unsupported. The local codex-cli 0.159.0 catalog
 inspected on 2026-09-29 also advertised `ultra` for Sol and Astra, but not

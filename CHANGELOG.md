@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.3 - 2026-10-12
+
+- Record GPT-6.1 Sol's larger Codex window: 500,000 tokens by default since
+  2026-10-11 (872,000 maximum, 95% effective), with other models at 272,000.
+  Note that the codex-cli 0.162.1 bundled catalog and custom providers still
+  report 272,000.
+
 ## 0.4.2 - 2026-09-29
 
 - Route ordinary work, planning, and reviews to GPT-6.1 Sol; keep GPT-6 Luna
