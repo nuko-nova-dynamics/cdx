@@ -61,6 +61,15 @@ test("the header refuses -c, which could replace the sandbox or approval policy"
   }
 });
 
+test("a teammate envelope is unwrapped, so its cdx: header applies", () => {
+  const wrapped = '<teammate-message teammate_id="team-lead" summary="x">\ncdx: --effort low\nReply ASTRA.\n</teammate-message>';
+  assert.deepEqual(parseRequest(wrapped), { prompt: "Reply ASTRA.", flags: [], effort: "low" });
+  const arrow = '<teammate-message teammate_id="team-lead" summary="v0.5.1 -> HEAD">\ncdx: --sandbox full --effort xhigh\nReview.\n</teammate-message>';
+  assert.deepEqual(parseRequest(arrow), { prompt: "Review.", flags: [], sandbox: "full", effort: "xhigh" }, "a > inside a quoted attribute");
+  const extra = '<teammate-message teammate_id="a">\nhi\n</teammate-message> and more';
+  assert.match(parseRequest(extra).prompt, /^<teammate-message/, "text outside envelopes is left as is");
+});
+
 test("the answer is the runner summary, or the failure with stderr; the session id is read from it", () => {
   const summary = "session: abc\nstatus: completed\n--- final message ---\ndone\n";
   assert.equal(threadIdOf(summary), "abc");

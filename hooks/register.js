@@ -30,10 +30,13 @@ async function endComputerUseTurn($, e) {
     if (!connected.isConnected) return;
     const hookEventName = e.isAborted ? "Interrupt" : e.agentId ? "SubagentStop" : "Stop";
     const sessionId = e.agentId ?? (await $.session.id());
+    // The launcher replaces session_id and turn_id with the ids it put on
+    // that agent's calls; cdx_agent says which agent ended.
     await $.mcp.call(connected.server, "turn_ended", {
       hook_event_name: hookEventName,
       session_id: sessionId,
       turn_id: e.turnId,
+      cdx_agent: e.agentId ?? "main",
     });
   } catch (err) {
     $.ui.log(`cdx: computer-use turn_ended failed: ${err?.message ?? err}`, { to: "debug" });
@@ -57,6 +60,12 @@ export function register(on) {
     if ((await codexApprovalPolicy($)) !== "never") return decided;
     return { decision: "allow", reason: 'Codex approval_policy is "never"; cdx computer use follows it.' };
   }).catch(($, e, next) => next(e));
+
+  // Tell the computer-use launcher which agent is calling, so each agent gets
+  // its own turn and a subagent's turn end releases only its own browser tabs.
+  on("tool.call", { tool: COMPUTER_USE_TOOL }, async ($, e, next) =>
+    next({ ...e, cdx_agent: e.agentId ?? "main" }),
+  ).catch(($, e, next) => next(e));
 
   on("turn.complete", async ($, e, next) => {
     const result = await next(e);

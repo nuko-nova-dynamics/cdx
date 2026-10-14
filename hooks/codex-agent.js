@@ -80,10 +80,23 @@ export function tokenize(line) {
   return tokens;
 }
 
+// With agent teams on, Claude Code delivers a teammate's prompt and each
+// SendMessage inside <teammate-message ...> envelopes. A text made only of
+// envelopes is reduced to their bodies, so the `cdx:` header is found and Codex
+// gets the prompt alone.
+// The opening tag's attribute values are quoted and can contain ">".
+const ENVELOPE = /<teammate-message\b(?:[^>"']|"[^"]*"|'[^']*')*>\n?([\s\S]*?)\n?<\/teammate-message>/g;
+export function unwrapTeammateMessages(text) {
+  const s = String(text ?? "");
+  const bodies = [...s.matchAll(ENVELOPE)].map((m) => m[1]);
+  if (!bodies.length || s.replace(ENVELOPE, "").trim()) return s;
+  return bodies.join("\n\n");
+}
+
 // Splits an optional first-line `cdx:` header from the prompt and parses its
 // flags. Returns { prompt, sandbox?, effort?, flags } or { error }.
 export function parseRequest(text) {
-  const body = String(text ?? "").replace(/^\s*\n/, "");
+  const body = unwrapTeammateMessages(text).replace(/^\s*\n/, "");
   const newline = body.indexOf("\n");
   const first = newline < 0 ? body : body.slice(0, newline);
   const header = /^\s*cdx:(.*)$/.exec(first);

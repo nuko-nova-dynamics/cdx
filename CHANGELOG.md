@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.6.2 - 2026-10-13
+
+- Fix `cdx:` headers being ignored for agents spawned as teammates (agent
+  teams on): Claude Code wraps their prompts in `<teammate-message>`
+  envelopes, so every such agent ran read-only at medium effort whatever its
+  header said. The envelopes are now unwrapped, including ones whose quoted
+  attributes contain `>`.
+- `/cdx:review` runs structured reviews through a `cdx:codex-sol` agent
+  (read-only, medium effort, `review-findings` schema in the `cdx:` header).
+  After fixes, a message to the same reviewer re-reviews with its context.
+  It falls back to the runner when the agent types are unavailable;
+  `--native` still uses `codex review`.
+- Computer use, from a Codex review of 0.6.x:
+  - Read `approval_policy` with TOML's string rules, so an example line
+    inside a string (even after an escaped quote) cannot turn on automatic
+    approval. Checked against Python's `tomllib` on about 4,400 generated
+    configs.
+  - Drop a call cancelled while the runtime starts, instead of running it.
+  - Retry a failed start on the next call, so installing the ChatGPT app or
+    its plugin mid-session works.
+  - Give each agent its own turn: the mod tags computer-use calls with the
+    calling agent, subagent calls carry Codex's subagent thread metadata, and
+    a subagent's turn end no longer ends the main conversation's browser turn.
+
 ## 0.6.1 - 2026-10-13
 
 - Send Codex turn metadata (`session_id`, `turn_id`, and the tool-use id as

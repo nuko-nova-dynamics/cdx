@@ -321,9 +321,13 @@ worktrees and scratch directories do not isolate UI state.
 
 ## Reviews
 
-Default to a runner task with `--sandbox ro` and the full path to
-`schemas/review-findings.schema.json`. Include the exact diff target and
-focus in its prompt. See `/cdx:review` for target selection.
+Default to a `cdx:codex-sol` agent with the header
+`cdx: --sandbox ro --effort medium --schema review-findings` and the exact
+diff target and focus in its prompt. Re-review after fixes by sending the
+same agent a message, which keeps its context. Without the agent types,
+use a runner task with `--sandbox ro` and the full path to
+`schemas/review-findings.schema.json`. See `/cdx:review` for target
+selection.
 
 When the user requests the native reviewer, use `codex review`.
 Its target flags (`--uncommitted`, `--base`, `--commit`) cannot be

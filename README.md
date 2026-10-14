@@ -54,7 +54,7 @@ supported; use the marketplace matching your existing installation.
 | Command | Purpose |
 |---|---|
 | `/cdx:task` | Delegate coding, desktop, or browser work with model, effort, sandbox, search, schema, and session controls. Name UI plugins and targets in the prompt. `--approve-for-me` opts into automatic review on fresh workspace-write runs. |
-| `/cdx:review` | Structured review Claude verifies finding-by-finding, or `--native` for Codex's built-in reviewer (`--uncommitted\|--base <ref>\|--commit <sha>`) |
+| `/cdx:review` | Structured review by a `cdx:codex-sol` agent that Claude verifies finding by finding and can message again for a re-review, or `--native` for Codex's built-in reviewer (`--uncommitted\|--base <ref>\|--commit <sha>`) |
 | `/cdx:fleet` | 2–4 parallel Codex workers: decomposed subtasks, multi-angle opinions, A/B implementations |
 | `/cdx:session` | `list`, `resume <id\|--last>`, `fork <id>`, `apply <task_id>` |
 | `/cdx:cloud` | Codex Cloud: `exec`, `list`, `status`, `diff`, `apply` |

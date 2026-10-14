@@ -17,9 +17,13 @@ import path from "node:path";
 import readline from "node:readline";
 import { approvalPolicyFromToml } from "../hooks/computer-use.js";
 
-const VERSION = "0.6.1";
+const VERSION = "0.6.2";
 const SUPPORTED_PROTOCOLS = ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"];
 const INIT_ID = "cdx-cu-init";
+
+// Which agent made a call: set by the cdx mod's tool.call hook (the subagent's
+// id, or "main"), stripped before the call reaches the runtime.
+const CDX_AGENT_PROPERTY = { type: "string", description: "Set by the cdx plugin; leave it out." };
 
 // `js` and `js_reset` are Claude's. `turn_ended` is listed only because the
 // cdx mod's $.mcp.call reaches listed tools alone; Codex hides it, and the mod
@@ -55,6 +59,7 @@ const TOOLS = [
           description: "Optional execution timeout in milliseconds. Defaults to 30000 (30 seconds) when omitted.",
         },
         title: { type: "string", minLength: 1, maxLength: 80, description: "Short user-facing description of what the code does." },
+        cdx_agent: CDX_AGENT_PROPERTY,
       },
       required: ["code"],
     },
@@ -65,7 +70,7 @@ const TOOLS = [
     description:
       "Reset the persistent cua_repl JavaScript session. All JavaScript bindings are discarded, and the next js call " +
       "initializes a fresh runtime. This does not close browser tabs or native apps, or erase their state.",
-    inputSchema: { type: "object", additionalProperties: false, properties: {} },
+    inputSchema: { type: "object", additionalProperties: false, properties: { cdx_agent: CDX_AGENT_PROPERTY } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   },
   {
@@ -80,6 +85,7 @@ const TOOLS = [
         hook_event_name: { type: "string", minLength: 1 },
         session_id: { type: "string", minLength: 1 },
         turn_id: { type: "string", minLength: 1 },
+        cdx_agent: CDX_AGENT_PROPERTY,
       },
       required: ["hook_event_name", "session_id", "turn_id"],
     },
@@ -160,26 +166,44 @@ export function isComputerUseApproval(msg) {
 // Codex sends turn metadata with every call, and the browser service requires
 // it (session_id, turn_id) and releases a turn's tabs on turn_ended with the
 // same ids. Claude Code sends neither, so the launcher owns them: one session
-// for its life, and a turn that ends at each turn_ended. Subagents share this
-// connection, so any agent's turn end starts a new turn for all of them.
+// for its life, and one turn per agent that ends at that agent's turn_ended.
+// A subagent's calls carry thread_source "subagent" and its id as thread_id,
+// as Codex's do, so its turn end releases only its own tabs.
 const sessionId = randomUUID();
-let turnId = randomUUID();
+const turns = new Map(); // agent key ("main" or a subagent id) -> current turn id
+const turnOf = (agent) => {
+  if (!turns.has(agent)) turns.set(agent, randomUUID());
+  return turns.get(agent);
+};
 
+// The call to send the runtime: cdx_agent taken out of the arguments, and
+// that agent's turn metadata added to _meta.
 export function withTurnMetadata(msg, ids) {
+  const { cdx_agent: agent = "main", ...args } = msg.params?.arguments ?? {};
   const meta = { ...(msg.params?._meta ?? {}) };
   const callId = meta["claudecode/toolUseId"];
   meta["x-codex-turn-metadata"] = JSON.stringify({
     session_id: ids.sessionId,
-    turn_id: ids.turnId,
+    turn_id: ids.turnOf(agent),
+    ...(agent === "main" ? {} : { thread_source: "subagent", thread_id: agent }),
     ...(typeof callId === "string" ? { call_id: callId } : {}),
   });
-  return { ...msg, params: { ...msg.params, _meta: meta } };
+  return { ...msg, params: { ...msg.params, arguments: args, _meta: meta } };
+}
+
+// turn_ended for the agent that ended: its session key (the subagent's id, as
+// Codex's SubagentStop sends it) and its current turn, which then ends.
+export function turnEndedArguments(args, ids) {
+  const { cdx_agent: agent = "main", ...rest } = args ?? {};
+  return { ...rest, session_id: agent === "main" ? ids.sessionId : agent, turn_id: ids.endTurn(agent) };
 }
 
 let clientInit = null; // the client's initialize params, replayed to the real server
 let child = null;
 let starting = null;
 const forwarded = new Map(); // client request id -> method, for requests the real server owes
+const awaitingStart = new Set(); // ids of calls waiting for the runtime to start
+const cancelledDuringStart = new Set();
 
 function stopChild() {
   if (child && child.exitCode === null) child.kill("SIGTERM");
@@ -187,10 +211,9 @@ function stopChild() {
 
 function startChild() {
   if (starting) return starting;
-  starting = new Promise((resolve) => {
+  const attempt = new Promise((resolve) => {
     const config = findServerConfig();
     if (config.error) {
-      starting = null;
       resolve({ error: config.error });
       return;
     }
@@ -203,7 +226,6 @@ function startChild() {
     const fail = (message) => {
       if (ready) return;
       ready = true; // settle once
-      starting = null;
       if (proc.exitCode === null) proc.kill("SIGTERM");
       resolve({ error: message });
     };
@@ -247,14 +269,27 @@ function startChild() {
     const init = clientInit ?? { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "cdx", version: VERSION } };
     proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: INIT_ID, method: "initialize", params: init }) + "\n");
   });
-  return starting;
+  starting = attempt;
+  // A failed start is not kept: the next call tries again, so installing the
+  // ChatGPT app or its plugin mid-session works without a restart.
+  attempt.then((result) => {
+    if (result.error && starting === attempt) starting = null;
+  });
+  return attempt;
 }
 
 async function forwardCall(msg) {
+  awaitingStart.add(msg.id);
   const started = child ? { child } : await startChild();
-  if (started.error) return toolError(msg.id, started.error);
+  awaitingStart.delete(msg.id);
+  if (started.error) {
+    if (cancelledDuringStart.delete(msg.id)) return;
+    return toolError(msg.id, started.error);
+  }
+  // Cancelled while the runtime was starting: never send it.
+  if (cancelledDuringStart.delete(msg.id)) return;
   forwarded.set(msg.id, msg.method);
-  started.child.stdin.write(JSON.stringify(withTurnMetadata(msg, { sessionId, turnId })) + "\n");
+  started.child.stdin.write(JSON.stringify(withTurnMetadata(msg, { sessionId, turnOf })) + "\n");
 }
 
 function handle(msg) {
@@ -285,11 +320,14 @@ function handle(msg) {
     case "tools/call": {
       const name = msg.params?.name;
       if (name === "turn_ended") {
-        const ended = turnId;
-        turnId = randomUUID();
+        const endTurn = (agent) => {
+          const ended = turnOf(agent);
+          turns.delete(agent);
+          return ended;
+        };
+        const args = turnEndedArguments(msg.params?.arguments, { sessionId, endTurn });
         // Nothing to clean up when the runtime never started.
         if (!child) return reply(msg.id, { content: [], isError: false });
-        const args = { ...msg.params?.arguments, session_id: sessionId, turn_id: ended };
         forwarded.set(msg.id, msg.method);
         child.stdin.write(JSON.stringify({ ...msg, params: { ...msg.params, arguments: args } }) + "\n");
         return;
@@ -302,6 +340,11 @@ function handle(msg) {
     }
     default:
       if (msg.method.startsWith("notifications/")) {
+        const requestId = msg.params?.requestId;
+        if (msg.method === "notifications/cancelled" && awaitingStart.has(requestId)) {
+          cancelledDuringStart.add(requestId);
+          return;
+        }
         if (child && msg.method !== "notifications/initialized") child.stdin.write(JSON.stringify(msg) + "\n");
         return;
       }
