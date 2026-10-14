@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.3 - 2026-10-13
+
+- Default efforts are now set per agent type: `codex-sol` and `codex-luna`
+  start at `xhigh`, `codex-astra` at `high`. A `cdx:` header or a resumed
+  session's stored effort still wins.
+- `/cdx:review` reviews at `xhigh`, and the routing guidance in the skills,
+  `/cdx:fleet`, and the README uses the same defaults.
+
 ## 0.6.2 - 2026-10-13
 
 - Fix `cdx:` headers being ignored for agents spawned as teammates (agent

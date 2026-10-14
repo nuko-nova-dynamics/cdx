@@ -28,11 +28,11 @@ Default structured path, through a Codex agent:
    `review-<target>`, and `run_in_background: true`. The prompt's first line
    is the header, then the review prompt:
    ```text
-   cdx: --sandbox ro --effort medium --schema review-findings
+   cdx: --sandbox ro --effort xhigh --schema review-findings
    Review <exact target> in <repository root> for correctness bugs, security issues, and broken edge cases. Focus: <focus or general correctness>. Inspect the code in place, including untracked files if part of the target. Report only findings supported by a concrete failure scenario. Do not edit files.
    ```
-   Change the header only for a reason: `--effort high` or `xhigh` for a
-   large or subtle diff, or other flags the user asked for. A header that
+   Change the header only for a reason, such as an effort or other flags
+   the user asked for. A header that
    grants `full` or `--search` still needs "read-only review" in the prompt.
 2. The agent's answer is the runner summary. Its final message is the
    findings JSON. Parse it and verify each finding against current source and
@@ -43,7 +43,7 @@ Default structured path, through a Codex agent:
    resumes the same Codex session with the same sandbox and effort.
 
 If the `cdx:codex-*` agent types are not available (mods are off), run the
-runner with Bash instead: `--sandbox ro --model gpt-6.1-sol --effort medium
+runner with Bash instead: `--sandbox ro --model gpt-6.1-sol --effort xhigh
 --schema "${CLAUDE_PLUGIN_ROOT}/schemas/review-findings.schema.json" -- <the
 same prompt>`, then follow step 2.
 

@@ -20,13 +20,15 @@ test("each agent type's model routes back to its Codex model; other models do no
   assert.equal(codexModelOf("cdx-codex-"), null);
 });
 
-test("a plain prompt runs read-only at medium effort with progress", () => {
+test("a plain prompt runs read-only at the agent type's default effort with progress", () => {
   const request = parseRequest("Fix the failing test");
   const { argv } = runnerArgs({ ...base, request });
   assert.deepEqual(argv, [
     "node", "/p/scripts/codex-run.mjs", "--progress", "--sandbox", "ro", "--model", "gpt-6.1-sol",
-    "--effort", "medium", "--", "Fix the failing test",
+    "--effort", "xhigh", "--", "Fix the failing test",
   ]);
+  assert.equal(runnerArgs({ ...base, model: "gpt-6-luna", request }).effort, "xhigh");
+  assert.equal(runnerArgs({ ...base, model: "gpt-6-astra", request }).effort, "high");
 });
 
 test("a cdx: header sets flags, resolves bundled schema names, and is removed from the prompt", () => {

@@ -8,7 +8,7 @@ Evidence reviewed on **2026-09-29**: the [DevDay recap](https://openai.com/index
 The routing choices below are this skill's policy, informed by those sources.
 Vendor evaluations do not prove a result on a particular delegated task.
 
-Use `gpt-6.1-sol` at `medium` when no more specific task shape fits. Choose
+Use `gpt-6.1-sol` at `xhigh` when no more specific task shape fits. Choose
 model and effort separately, honor explicit user choices, and check the
 installed catalog before launching. Do not route new work to Terra by default.
 
@@ -21,18 +21,17 @@ Astra remains the highest-scoring model on the launch's scientific benchmark.
 These are research/API evaluations; production tools and prompts can differ.
 The launch provides no direct coding comparison with GPT-6 Luna.
 
-Use Sol `medium` for ordinary implementation, reviews, authenticated browsing,
-and administrative work. Use `high` for planning or conflicting sources and
-`xhigh` for subtle debugging, concurrency, security, or difficult cross-file
-reasoning. A thin brief needs clarification and relevant source context;
+Sol runs at `xhigh` for every task: implementation, reviews, planning,
+authenticated browsing, administrative work, and debugging. Use another Sol
+effort only when the user names it. A thin brief needs clarification and relevant source context;
 increasing model size does not replace them.
 
 ## Luna and Astra
 
 `gpt-6-luna` remains the low-cost choice for exact extraction, checks, git
-operations, and bounded implementation. Use `low` for repeatable steps,
-`medium` for several checks, and `high` or `xhigh` when a clear plan, file
-scope, acceptance criteria, and verified commands support implementation.
+operations, and bounded implementation. It runs at `xhigh` unless the user
+names another effort; give it implementation only when a clear plan, file
+scope, acceptance criteria, and verified commands support it.
 Review the diff for unrequested changes. GPT-5.6 Luna anecdotes do not
 establish GPT-6 Luna's performance or its best effort setting.
 
@@ -40,10 +39,10 @@ Reserve `gpt-6-astra` for a specific technical or scientific difficulty that
 Sol at an appropriate effort is unlikely to handle, or a demonstrated
 capability limit after correcting the brief and tools. Importance, many
 pages, authentication, or computer use alone do not qualify. Start at
-`medium`, delegate only the hard portion, and never fan out Astra.
+`high`, delegate only the hard portion, and never fan out Astra.
 
-If a Luna worker needs broader judgment, switch to Sol. Raise effort when
-the available evidence is difficult to reconcile. Missing inputs, broken
+If a Luna worker needs broader judgment, switch to Sol. Raise Astra's effort
+when the available evidence is difficult to reconcile. Missing inputs, broken
 commands, unavailable tools, and permission blocks need those problems
 addressed first. Avoid retrying every tier as a fixed escalation ladder.
 

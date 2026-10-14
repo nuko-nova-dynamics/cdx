@@ -92,9 +92,9 @@ Spawn a codex-sol agent named "fixer" to fix the failing tests, then ask it
 to explain the root cause.
 ```
 
-Runs are read-only at medium effort. The prompt's first line can be a `cdx:`
-header of runner flags, such as `cdx: --sandbox write --effort high`; the
-agent type sets the model. Follow-ups keep the previous sandbox and effort.
+Runs are read-only, at `xhigh` effort for `codex-sol` and `codex-luna` and
+`high` for `codex-astra`. The prompt's first line can be a `cdx:` header of runner flags,
+such as `cdx: --sandbox write --effort high`; the agent type sets the model. Follow-ups keep the previous sandbox and effort.
 Progress (commands, edits, searches) streams while Codex works. With
 `isolation: "worktree"`, Codex runs in the agent's worktree.
 
@@ -170,9 +170,10 @@ the host environment (for example the `env` block of Claude Code's
 flags still win.
 
 When no model is named, Claude routes ordinary work and reviews to
-`gpt-6.1-sol` at medium, planning to Sol high, and difficult reasoning to
-Sol xhigh. GPT-6 Luna handles bounded checks and implementation with a complete
-brief; Astra is reserved for a specific difficulty Sol is unlikely to handle.
+`gpt-6.1-sol`, which always runs at xhigh unless you name another effort.
+GPT-6 Luna (default xhigh) handles bounded checks and implementation with a
+complete brief; Astra (default high) is reserved for a specific difficulty Sol
+is unlikely to handle.
 New work does not default to Terra. Each fleet worker gets its own model and
 effort choice. These are routing policies informed by the
 [September 29 launch](https://openai.com/index/introducing-gpt-6-1-sol/),
@@ -186,7 +187,7 @@ Tasks needing UI plugins or MCP servers keep the full configuration. See the
 [model routing reference](skills/driving-codex/references/model-routing.md).
 
 ```bash
-node scripts/codex-run.mjs --sandbox ro --model gpt-6.1-sol --effort medium -- "Review this repository"
+node scripts/codex-run.mjs --sandbox ro --model gpt-6.1-sol --effort xhigh -- "Review this repository"
 node scripts/codex-run.mjs --sandbox ro --fork <session-id>
 ```
 

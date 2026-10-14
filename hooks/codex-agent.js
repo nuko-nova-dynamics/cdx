@@ -11,25 +11,28 @@ export const AGENTS = [
   {
     name: "codex-sol",
     model: "gpt-6.1-sol",
+    effort: "xhigh",
     description:
       "Codex CLI running GPT-6.1 Sol: ordinary implementation, reviews, planning, and debugging. " +
-      "Read-only at medium effort unless the prompt's first line is a `cdx:` header such as " +
-      "`cdx: --sandbox write --effort high`. SendMessage continues the same Codex session.",
+      "Read-only at xhigh effort unless the prompt's first line is a `cdx:` header such as " +
+      "`cdx: --sandbox write`. SendMessage continues the same Codex session.",
   },
   {
     name: "codex-luna",
     model: "gpt-6-luna",
+    effort: "xhigh",
     description:
       "Codex CLI running GPT-6 Luna: bounded checks, extraction, and well-briefed mechanical edits. " +
-      "Read-only at medium effort unless the prompt's first line is a `cdx:` header such as " +
-      "`cdx: --sandbox write --effort high --lean`. SendMessage continues the same Codex session.",
+      "Read-only at xhigh effort unless the prompt's first line is a `cdx:` header such as " +
+      "`cdx: --sandbox write --lean`. SendMessage continues the same Codex session.",
   },
   {
     name: "codex-astra",
     model: "gpt-6-astra",
+    effort: "high",
     description:
       "Codex CLI running GPT-6 Astra: only the hardest technical or scientific portion of a task, " +
-      "after naming why Sol is unlikely to handle it. Read-only at medium effort unless the prompt's " +
+      "after naming why Sol is unlikely to handle it. Read-only at high effort unless the prompt's " +
       "first line is a `cdx:` header. SendMessage continues the same Codex session.",
   },
 ];
@@ -59,6 +62,7 @@ export const RECORD_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 const DEFAULT_SANDBOX = "ro";
 const DEFAULT_EFFORT = "medium";
+const defaultEffort = (model) => AGENTS.find((a) => a.model === model)?.effort ?? DEFAULT_EFFORT;
 const SCHEMA_NAMES = new Set(["review-findings", "verdict", "task-report", "patch-plan"]);
 const VALUE_FLAGS = new Set(["--sandbox", "--effort", "--schema", "--image", "--add-dir"]);
 const BOOLEAN_FLAGS = new Set(["--search", "--fast", "--lean", "--approve-for-me"]);
@@ -124,10 +128,11 @@ export function parseRequest(text) {
 
 // The runner argv for one turn. A record means the agent already has a Codex
 // session, so the turn resumes it with the sandbox and effort it last used
-// unless the header changes them.
+// unless the header changes them. A new session starts at its agent type's
+// default effort.
 export function runnerArgs({ runner, schemasDir, model, record, request }) {
   const sandbox = request.sandbox ?? record?.sandbox ?? DEFAULT_SANDBOX;
-  const effort = request.effort ?? record?.effort ?? DEFAULT_EFFORT;
+  const effort = request.effort ?? record?.effort ?? defaultEffort(model);
   const argv = ["node", runner, "--progress", "--sandbox", sandbox, "--model", model, "--effort", effort];
   if (record?.thread) argv.push("--resume", record.thread);
   for (let i = 0; i < request.flags.length; i += 1) {

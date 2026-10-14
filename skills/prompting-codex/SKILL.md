@@ -12,19 +12,18 @@ boundaries clearer; tags and a fixed collection of blocks are optional.
 ## Model and budget handoff
 
 Choose model and effort separately using `cdx:driving-codex`. If no task shape
-fits, use `gpt-6.1-sol` at `medium`. Name the model, effort, and reason before
-launching. Sol handles ordinary implementation, review, and authenticated
-browsing; `high` supports planning and conflicting evidence, and `xhigh`
-supports difficult debugging or cross-file reasoning.
+fits, use `gpt-6.1-sol` at `xhigh`. Name the model, effort, and reason before
+launching. Sol runs at `xhigh` for implementation, review, planning,
+authenticated browsing, and debugging unless the user names another effort.
 
-Use `gpt-6-luna` for bounded work: `low` for exact steps, `medium` for several
-checks, and `high` or `xhigh` for implementation with a plan, file scope,
-acceptance criteria, and verified commands. Review its diff. Move to Sol when
+Use `gpt-6-luna` at `xhigh` for bounded work: exact steps, checks, and
+implementation with a plan, file scope, acceptance criteria, and verified
+commands. Review its diff. Move to Sol when
 the task needs broader judgment. Do not route new work to Terra by default;
 explicit user choices still win.
 
 Reserve `gpt-6-astra` for a specific hard technical or scientific difficulty
-that Sol at an appropriate effort is unlikely to handle. Start at `medium`,
+that Sol at an appropriate effort is unlikely to handle. Start at `high`,
 keep context tight, delegate only the hard portion, and never fan it out.
 Importance, many pages, authentication, or computer use alone do not qualify.
 Inspect failures before changing model or effort; missing inputs and broken

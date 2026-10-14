@@ -22,7 +22,8 @@ its result. Plugin selection is a prompt requirement, not a runner flag.
 ## Choose the model first
 
 Choose the model and reasoning effort separately. If no task shape fits,
-fall back to `gpt-6.1-sol --effort medium`. Explicit user choices always win,
+fall back to `gpt-6.1-sol --effort xhigh`. Unless the user names another
+effort, Sol and Luna run at `xhigh` and Astra at `high`. Explicit user choices always win,
 and a model error is never permission to substitute.
 
 Codex subscription usage is charged on every request for input, cached input,
@@ -34,44 +35,41 @@ workflows.
 
 | Task shape | Model and effort | Why |
 |---|---|---|
-| Ordinary implementation, authenticated browsing, administrative work | `gpt-6.1-sol --effort medium` | Default for work that needs judgment across several steps |
-| Planning, decomposition, architecture, final merge decision | `gpt-6.1-sol --effort high` | Reconcile constraints and give bounded workers a clear plan |
+| Ordinary implementation, authenticated browsing, administrative work | `gpt-6.1-sol --effort xhigh` | Default for work that needs judgment across several steps |
+| Planning, decomposition, architecture, final merge decision | `gpt-6.1-sol --effort xhigh` | Reconcile constraints and give bounded workers a clear plan |
 | Subtle debugging, security, concurrency, unresolved cross-file reasoning | `gpt-6.1-sol --effort xhigh` | Spend more reasoning on the specific difficulty |
-| Well-briefed implementation, mechanical edits, tests, refactors with a plan | `gpt-6-luna --effort high` or `xhigh` | Lower token rates for bounded work that can be verified and reviewed |
-| Fleet workers | `gpt-6-luna --effort medium` for checks; `high` or `xhigh` for bounded implementation | Select each worker separately; use Sol when it needs broader judgment |
-| Large-context or under-specified work | `gpt-6.1-sol --effort medium` or `high` | Clarify the brief and trim irrelevant context before launching |
-| Repo exploration, running checks, git operations, extraction | `gpt-6-luna --effort low` or `medium` | Low for exact steps; medium for several checks |
-| Hardest technical or scientific tasks beyond Sol's demonstrated capability | `gpt-6-astra --effort medium` | Delegate only the hard portion, keep the context tight, and never fan it out |
-| Review of a diff | `gpt-6.1-sol --effort medium` with the review schema | Inspect contract fidelity and resolve findings against source |
+| Well-briefed implementation, mechanical edits, tests, refactors with a plan | `gpt-6-luna --effort xhigh` | Lower token rates for bounded work that can be verified and reviewed |
+| Fleet workers | `gpt-6-luna --effort xhigh` | Select each worker separately; use Sol when it needs broader judgment |
+| Large-context or under-specified work | `gpt-6.1-sol --effort xhigh` | Clarify the brief and trim irrelevant context before launching |
+| Repo exploration, running checks, git operations, extraction | `gpt-6-luna --effort xhigh` | Lower token rates for exact steps and checks |
+| Hardest technical or scientific tasks beyond Sol's demonstrated capability | `gpt-6-astra --effort high` | Delegate only the hard portion, keep the context tight, and never fan it out |
+| Review of a diff | `gpt-6.1-sol --effort xhigh` with the review schema | Inspect contract fidelity and resolve findings against source |
 
 Rules that go with the table:
 
-- Luna `low` is for simple extraction and exact, repeatable steps. Use
-  `medium` when the task needs several checks. Use `high` or `xhigh` for a
-  bounded implementation only when the brief includes the plan, file scope,
+- Luna runs at `xhigh` for extraction, checks, and bounded implementation.
+  Give it implementation only when the brief includes the plan, file scope,
   acceptance criteria, and verified commands. Review its diff for unrequested
   edits.
 - Sol means `gpt-6.1-sol`; Luna means `gpt-6-luna`. Do not route new work
   to Terra or an older Sol/Luna by default. Explicit user choices still win.
-- Sol `medium` is the ordinary setting for implementation, reviews, routine
-  navigation, authenticated browsing, course or administrative audits, and
-  tracker synchronization. Use `high` for planning, complex logic, or
-  conflicting sources, and `xhigh` for subtle debugging, concurrency,
-  security, or unresolved cross-file reasoning.
+- Sol runs at `xhigh` for every task shape: implementation, reviews,
+  planning, routine navigation, authenticated browsing, administrative
+  audits, tracker synchronization, and debugging. Use another Sol effort
+  only when the user names it.
 - Reserve Astra for the most ambitious and technically difficult work. Before
   selecting it, name the specific difficulty that Sol at an appropriate effort
   is unlikely to handle, or cite a demonstrated capability limit after fixing
   the brief and tools. Ambiguity, importance, many pages, authentication, or
   computer use alone do not justify Astra. Simple site navigation, information
   gathering, course reconciliation, and tracker updates belong on Sol or a
-  lighter model. Start at `medium`, delegate only the hard portion, and never
+  lighter model. Start at `high`, delegate only the hard portion, and never
   fan it out.
-- Lower effort for straightforward follow-ups. Raise it when available
-  evidence is difficult to reconcile. Inspect failures first: missing inputs,
+- Keep the default efforts above unless the user names another. Raise
+  Astra's when available evidence is difficult to reconcile. Inspect failures first: missing inputs,
   invalid commands, unavailable tools, and permission blocks need those
   problems addressed before switching models or retrying.
 - Switch a failing Luna worker to Sol when the task needs broader judgment.
-  Raise Sol's effort when the evidence is available but difficult to reconcile.
   Address missing inputs or broken tools first; do not retry every tier or
   use Astra to rescue a loop.
 - Prefer `xhigh` over `max` unless the user asks for `max`. Use `max` or
@@ -165,7 +163,8 @@ directly for one-shot runs, `--fork`, `--local`, native reviews, and cloud.
 
 - Choose the agent type from the model table above. The Agent tool's
   `model` parameter selects Claude models only; it does not choose Codex's.
-- Each run is read-only at medium effort. To change that, make the
+- Each run is read-only, at `xhigh` effort for `codex-sol` and
+  `codex-luna` and `high` for `codex-astra`. To change that, make the
   prompt's first line a `cdx:` header of runner flags, such as
   `cdx: --sandbox write --effort high --search`. The header accepts
   `--sandbox`, `--effort`, `--search`, `--fast`, `--lean`,
@@ -322,7 +321,7 @@ worktrees and scratch directories do not isolate UI state.
 ## Reviews
 
 Default to a `cdx:codex-sol` agent with the header
-`cdx: --sandbox ro --effort medium --schema review-findings` and the exact
+`cdx: --sandbox ro --effort xhigh --schema review-findings` and the exact
 diff target and focus in its prompt. Re-review after fixes by sending the
 same agent a message, which keeps its context. Without the agent types,
 use a runner task with `--sandbox ro` and the full path to
