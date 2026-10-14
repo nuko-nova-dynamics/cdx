@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 - 2026-10-13
+
+- Add a mod that registers `cdx:codex-sol`, `cdx:codex-luna`, and
+  `cdx:codex-astra` as Agent tool types. Spawning one runs Codex through the
+  runner, and `SendMessage` resumes the same Codex session. Runs default to
+  read-only at medium effort; a first-line `cdx:` header passes runner flags.
+  Codex runs in the agent's worktree under `isolation: "worktree"`.
+- Add runner `--progress`, which writes the session id as soon as Codex
+  assigns it, then one stderr line per command, file change, tool call, web
+  search, or error item while Codex works.
+
 ## 0.4.3 - 2026-10-12
 
 - Record GPT-6.1 Sol's larger Codex window: 500,000 tokens by default since

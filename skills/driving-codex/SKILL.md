@@ -153,6 +153,40 @@ Use `--help` for the runner's current options. Native reviews and cloud
 management have separate commands below. For long tasks, use Bash
 `run_in_background: true` and collect the result when the process exits.
 
+## Codex as a subagent
+
+The cdx mod registers three Agent tool types: `cdx:codex-sol`
+(`gpt-6.1-sol`), `cdx:codex-luna` (`gpt-6-luna`), and `cdx:codex-astra`
+(`gpt-6-astra`). Spawning one runs the runner for that model, and
+`SendMessage` to the agent resumes the same Codex session. Use an agent
+when the conversation with Codex will take more than one turn, or when
+named agents should run in the background and report back. Use the runner
+directly for one-shot runs, `--fork`, `--local`, native reviews, and cloud.
+
+- Choose the agent type from the model table above. The Agent tool's
+  `model` parameter selects Claude models only; it does not choose Codex's.
+- Each run is read-only at medium effort. To change that, make the
+  prompt's first line a `cdx:` header of runner flags, such as
+  `cdx: --sandbox write --effort high --search`. The header accepts
+  `--sandbox`, `--effort`, `--search`, `--fast`, `--lean`,
+  `--approve-for-me`, `--schema <name|path>`, `--image`, and `--add-dir`.
+  The agent type sets the model, and the mod sets the session and working
+  directory. It refuses `-c`: a config override can replace the sandbox or
+  approval policy. Use the runner directly when a run needs `-c`.
+- Follow-ups resume with the sandbox and effort of the agent's previous
+  turn unless a new header changes them. `--lean`, `--add-dir`, and
+  `--approve-for-me` apply to the first turn only.
+- The agent's answer is the runner summary: session id, status, token
+  usage, final message, and artifact paths. Verify it as you would a
+  runner result. Progress (commands, edits, searches) streams while it
+  runs and is not kept in the transcript.
+- With `isolation: "worktree"`, Codex runs in the agent's worktree.
+- Codex's commands do not pass through Claude Code's permission prompts;
+  the sandbox is the control. Apply the sandbox rules below to the header.
+- The types exist only when mods load: Claude Code CLI 2.1.287 or later,
+  without `--safe-mode` or `disableAllHooks`. If the types are not listed,
+  use the runner.
+
 ## Git, sandbox, and capability claims
 
 Codex can use Git, including committing, when the selected sandbox and the

@@ -22,6 +22,7 @@ if (mode === "fork-only") {
     event({ type: "turn.failed", error: { message: "boom: model exploded" } });
     process.exitCode = 1;
   } else {
+    event({ type: "item.started", item: { id: "item_0", type: "command_execution", command: "ls" } });
     event({ type: "item.completed", item: { id: "item_0", type: "command_execution", command: "ls" } });
     process.stdout.write("not json garbage line\n");
     if (mode === "large") {

@@ -18,7 +18,7 @@ const LOCAL_PROVIDERS = new Set(["lmstudio", "ollama"]);
 const USAGE = "usage: codex-run.mjs --sandbox <ro|write|full> [--model <m|spark>] [--effort <e>] [--fast] [--search] [--lean] " +
   "[--approve-for-me] [--image <f>]... [--schema <path>] [--resume <id|last> | --fork <id>] " +
   "[--local [lmstudio|ollama]] [--add-dir <d>]... [--cd <dir>] [-c k=v]... " +
-  "[--ephemeral] [--scratch <dir>] -- <prompt...>\n";
+  "[--ephemeral] [--scratch <dir>] [--progress] -- <prompt...>\n";
 
 function die(msg) {
   process.stderr.write(`codex-run: ${msg}\n${USAGE}`);
@@ -77,6 +77,8 @@ function parseArgs(argv) {
       o.ephemeral = true;
     } else if (a === "--scratch") {
       o.scratch = next(a);
+    } else if (a === "--progress") {
+      o.progress = true;
     } else if (a.startsWith("-")) {
       die(`unknown flag: ${a}`);
     } else {
@@ -208,6 +210,25 @@ const state = {
   itemCounts: {},
 };
 
+// One stderr line for the session id as soon as Codex assigns it, then one per
+// command, file change, tool call, or search, for callers that show live
+// progress (the cdx Codex agents). Fields absent from an event fall back to the
+// item type.
+function progressLine(ev) {
+  if (ev.type === "thread.started" && ev.thread_id) return `session ${ev.thread_id}`;
+  const item = ev.item ?? {};
+  if (ev.type === "item.started" && item.type === "command_execution") return `$ ${item.command ?? ""}`;
+  if (ev.type === "item.started" && item.type === "web_search") return `search ${item.query ?? ""}`;
+  if (ev.type !== "item.completed") return null;
+  if (item.type === "file_change") {
+    const paths = (item.changes ?? []).map((c) => c.path).filter(Boolean);
+    return `edited ${paths.join(", ") || "files"}`;
+  }
+  if (item.type === "mcp_tool_call") return `tool ${[item.server, item.tool].filter(Boolean).join(".") || "call"}`;
+  if (item.type === "error") return `error ${item.message ?? ""}`;
+  return null;
+}
+
 const rl = readline.createInterface({ input: child.stdout });
 rl.on("line", (line) => {
   eventsOut.write(line + "\n");
@@ -216,6 +237,10 @@ rl.on("line", (line) => {
     ev = JSON.parse(line);
   } catch {
     return; // non-JSON noise
+  }
+  if (opts.progress) {
+    const p = progressLine(ev);
+    if (p) process.stderr.write(`cdx-progress: ${p.replace(/\s+/g, " ").slice(0, 300)}\n`);
   }
   if (ev.type === "thread.started") state.threadId = ev.thread_id;
   else if (ev.type === "turn.completed") {

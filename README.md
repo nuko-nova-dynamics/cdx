@@ -45,7 +45,9 @@ supported; use the marketplace matching your existing installation.
   JSON (`--output-schema`) that Claude parses, verifies, and acts on.
 - **Codex owns its state.** Sessions live in `~/.codex`; cdx keeps no job
   registry, no state files, no companion daemon. One small runner script tames
-  the JSONL event stream; everything else is the CLI itself.
+  the JSONL event stream; everything else is the CLI itself. The one
+  exception is the mod's record of which Codex session each Codex agent
+  owns, kept in Claude Code's mod store and dropped after 30 days unused.
 
 ## Commands
 
@@ -74,6 +76,30 @@ supported; use the marketplace matching your existing installation.
 - **prompting-codex**: task framing, authorization, and proportional verification,
   with GPT-6 Astra guidance. Original templates were adapted from
   openai/codex-plugin-cc (Apache-2.0, see NOTICE).
+
+## Codex as a subagent
+
+cdx includes a mod that registers three Agent tool types:
+`cdx:codex-sol`, `cdx:codex-luna`, and `cdx:codex-astra`. Claude spawns one
+like any other subagent. The mod answers the agent's model requests by
+running the runner with that Codex model, so the agent's reply is Codex's
+result and no Claude request is made for it. `SendMessage` to the agent
+resumes the same Codex session, and named agents can run in the background.
+
+```text
+Spawn a codex-sol agent named "fixer" to fix the failing tests, then ask it
+to explain the root cause.
+```
+
+Runs are read-only at medium effort. The prompt's first line can be a `cdx:`
+header of runner flags, such as `cdx: --sandbox write --effort high`; the
+agent type sets the model. Follow-ups keep the previous sandbox and effort.
+Progress (commands, edits, searches) streams while Codex works. With
+`isolation: "worktree"`, Codex runs in the agent's worktree.
+
+Codex's commands run under its own sandbox, not Claude Code's permission
+prompts. Mods need Claude Code CLI 2.1.287 or later and do not load under
+`--safe-mode` or `disableAllHooks`; the runner and commands work without them.
 
 ## Computer Use and browsers
 

@@ -1,0 +1,172 @@
+// Pure helpers for the Codex subagents: which agent types exist, how a
+// request's `cdx:` header becomes runner flags, and how the runner's output
+// becomes the agent's answer. No `$` calls here, so `node --test` can load it.
+
+// A registered agent's model is this prefix plus the Codex model. Claude Code
+// accepts the id as given; the `turn.step` hook answers every request that
+// names it, so no request with this model reaches an API.
+export const MODEL_PREFIX = "cdx-codex-";
+
+export const AGENTS = [
+  {
+    name: "codex-sol",
+    model: "gpt-6.1-sol",
+    description:
+      "Codex CLI running GPT-6.1 Sol: ordinary implementation, reviews, planning, and debugging. " +
+      "Read-only at medium effort unless the prompt's first line is a `cdx:` header such as " +
+      "`cdx: --sandbox write --effort high`. SendMessage continues the same Codex session.",
+  },
+  {
+    name: "codex-luna",
+    model: "gpt-6-luna",
+    description:
+      "Codex CLI running GPT-6 Luna: bounded checks, extraction, and well-briefed mechanical edits. " +
+      "Read-only at medium effort unless the prompt's first line is a `cdx:` header such as " +
+      "`cdx: --sandbox write --effort high --lean`. SendMessage continues the same Codex session.",
+  },
+  {
+    name: "codex-astra",
+    model: "gpt-6-astra",
+    description:
+      "Codex CLI running GPT-6 Astra: only the hardest technical or scientific portion of a task, " +
+      "after naming why Sol is unlikely to handle it. Read-only at medium effort unless the prompt's " +
+      "first line is a `cdx:` header. SendMessage continues the same Codex session.",
+  },
+];
+
+// The agent's system prompt never reaches a model; it records what the type is.
+const AGENT_PROMPT =
+  "This agent type is answered by the cdx mod, which runs the Codex CLI through " +
+  "scripts/codex-run.mjs. Claude does not run this agent's loop.";
+
+export function agentSpec(agent) {
+  return {
+    name: agent.name,
+    description: agent.description,
+    prompt: AGENT_PROMPT,
+    model: MODEL_PREFIX + agent.model,
+  };
+}
+
+export function codexModelOf(stepModel) {
+  const m = String(stepModel ?? "");
+  return m.startsWith(MODEL_PREFIX) && m.length > MODEL_PREFIX.length ? m.slice(MODEL_PREFIX.length) : null;
+}
+
+// Per-agent records: the Codex session plus the sandbox and effort to resume with.
+export const RECORD_PREFIX = "cdx-codex-agent:";
+export const RECORD_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+const DEFAULT_SANDBOX = "ro";
+const DEFAULT_EFFORT = "medium";
+const SCHEMA_NAMES = new Set(["review-findings", "verdict", "task-report", "patch-plan"]);
+const VALUE_FLAGS = new Set(["--sandbox", "--effort", "--schema", "--image", "--add-dir"]);
+const BOOLEAN_FLAGS = new Set(["--search", "--fast", "--lean", "--approve-for-me"]);
+// The mod owns the model, the session, the working directory, and the scratch
+// directory; an ephemeral session could not be resumed by SendMessage. `-c`
+// is refused outright: a config override can replace the sandbox or approval
+// policy (directly, through a permission profile, or through spellings a key
+// filter misses) while the stored record still names the selected sandbox.
+const MOD_OWNED = new Set([
+  "--model", "--resume", "--fork", "--cd", "--scratch", "--local", "--ephemeral", "--progress", "--help", "-h", "--",
+  "-c",
+]);
+
+export function tokenize(line) {
+  const tokens = [];
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let m;
+  while ((m = re.exec(line))) tokens.push(m[1] ?? m[2] ?? m[3]);
+  return tokens;
+}
+
+// Splits an optional first-line `cdx:` header from the prompt and parses its
+// flags. Returns { prompt, sandbox?, effort?, flags } or { error }.
+export function parseRequest(text) {
+  const body = String(text ?? "").replace(/^\s*\n/, "");
+  const newline = body.indexOf("\n");
+  const first = newline < 0 ? body : body.slice(0, newline);
+  const header = /^\s*cdx:(.*)$/.exec(first);
+  const prompt = (header ? (newline < 0 ? "" : body.slice(newline + 1)) : body).trim();
+  if (!prompt) return { error: "the request has no prompt after the cdx: header" };
+  const out = { prompt, flags: [] };
+  const tokens = header ? tokenize(header[1]) : [];
+  for (let i = 0; i < tokens.length; i += 1) {
+    const flag = tokens[i];
+    if (MOD_OWNED.has(flag)) return { error: `${flag} is set by the agent type or the mod, not the cdx: header` };
+    if (BOOLEAN_FLAGS.has(flag)) {
+      out.flags.push(flag);
+      continue;
+    }
+    if (!VALUE_FLAGS.has(flag)) return { error: `unknown cdx: header flag ${flag}` };
+    const value = tokens[i + 1];
+    if (value === undefined || value.startsWith("--")) return { error: `${flag} requires a value` };
+    i += 1;
+    if (flag === "--sandbox") out.sandbox = value;
+    else if (flag === "--effort") out.effort = value;
+    else out.flags.push(flag, value);
+  }
+  return out;
+}
+
+// The runner argv for one turn. A record means the agent already has a Codex
+// session, so the turn resumes it with the sandbox and effort it last used
+// unless the header changes them.
+export function runnerArgs({ runner, schemasDir, model, record, request }) {
+  const sandbox = request.sandbox ?? record?.sandbox ?? DEFAULT_SANDBOX;
+  const effort = request.effort ?? record?.effort ?? DEFAULT_EFFORT;
+  const argv = ["node", runner, "--progress", "--sandbox", sandbox, "--model", model, "--effort", effort];
+  if (record?.thread) argv.push("--resume", record.thread);
+  for (let i = 0; i < request.flags.length; i += 1) {
+    const flag = request.flags[i];
+    argv.push(flag);
+    if (!VALUE_FLAGS.has(flag)) continue;
+    const value = request.flags[++i];
+    argv.push(flag === "--schema" && SCHEMA_NAMES.has(value) ? `${schemasDir}/${value}.schema.json` : value);
+  }
+  argv.push("--", request.prompt);
+  return { argv, sandbox, effort };
+}
+
+// The session id from a `session <id>` progress line, which the runner writes
+// as soon as Codex assigns it.
+export function sessionOfProgress(line) {
+  const m = /^session (\S+)$/.exec(line);
+  return m ? m[1] : null;
+}
+
+export function threadIdOf(stdout) {
+  const m = /^session: (\S+)$/m.exec(stdout);
+  return m && m[1] !== "unknown" ? m[1] : null;
+}
+
+export const PROGRESS_PREFIX = "cdx-progress: ";
+
+// Splits streamed text into whole lines, keeping a partial last line.
+export function lineBuffer() {
+  let rest = "";
+  return {
+    push(text) {
+      const lines = (rest + text).split("\n");
+      rest = lines.pop();
+      return lines;
+    },
+    flush() {
+      const last = rest;
+      rest = "";
+      return last ? [last] : [];
+    },
+  };
+}
+
+// The agent's answer: the runner's summary, or why the runner produced none.
+export function answerText({ stdout, stderrLines, code, signal }) {
+  const summary = stdout.trim();
+  const errors = stderrLines.filter((l) => l.trim()).join("\n").trim();
+  if (summary && code === 0) return summary;
+  const ended = signal ? `stopped by ${signal}` : `exit ${code}`;
+  const parts = [`cdx: the Codex runner did not complete (${ended}).`];
+  if (summary) parts.push(summary);
+  if (errors) parts.push(`stderr:\n${errors.slice(-4000)}`);
+  return parts.join("\n\n");
+}

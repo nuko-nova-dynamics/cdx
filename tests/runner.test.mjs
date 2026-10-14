@@ -276,7 +276,7 @@ test("large event and stderr artifacts are complete when the runner exits", (t) 
   assert.equal(r.status, 0, r.stderr);
   const events = readFileSync(path.join(r.scratch, "events.jsonl"), "utf8").trim().split("\n");
   assert.equal(JSON.parse(events.at(-1)).type, "turn.completed");
-  assert.equal(events.length, 106);
+  assert.equal(events.length, 107);
   const stderr = readFileSync(path.join(r.scratch, "stderr.log"), "utf8");
   assert.equal(stderr.length, 100 * 16385 + "stderr complete\n".length);
   assert.ok(stderr.endsWith("stderr complete\n"));
@@ -318,4 +318,12 @@ test("--lean accepts CDX_DEFAULT_MODEL in place of --model", (t) => {
   assert.equal(r.status, 0, r.stderr);
   assert.ok(r.args.includes("--ignore-user-config"));
   assert.equal(r.args[r.args.indexOf("-m") + 1], "gpt-6-luna");
+});
+
+test("--progress writes the session id, then one stderr line per command, and keeps stdout unchanged", () => {
+  const r = run(["--sandbox", "ro", "--progress", "--", "say hi"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stderr, "cdx-progress: session fake-thread-123\ncdx-progress: $ ls\n");
+  assert.match(r.stdout, /fake done/);
+  assert.equal(run(["--sandbox", "ro", "--", "say hi"]).stderr, "", "no progress without the flag");
 });
