@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { codexApprovalPolicy, findServerConfig, isComputerUseApproval } from "../scripts/codex-cu-mcp.mjs";
+import { codexApprovalPolicy, findServerConfig, isComputerUseApproval, withTurnMetadata } from "../scripts/codex-cu-mcp.mjs";
 
 const darwin = process.platform === "darwin";
 
@@ -45,4 +45,13 @@ test("only computer-use elicitations count as app approvals", () => {
   assert.equal(isComputerUseApproval(approval), true);
   assert.equal(isComputerUseApproval({ method: "elicitation/create", params: { _meta: { connector_id: "browser" } } }), false);
   assert.equal(isComputerUseApproval({ method: "tools/call" }), false);
+});
+
+test("calls carry Codex turn metadata with the session, turn, and tool-use id", () => {
+  const msg = { jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "js", arguments: { code: "1" }, _meta: { "claudecode/toolUseId": "toolu_1", progressToken: 4 } } };
+  const out = withTurnMetadata(msg, { sessionId: "s-1", turnId: "t-1" });
+  assert.deepEqual(JSON.parse(out.params._meta["x-codex-turn-metadata"]), { session_id: "s-1", turn_id: "t-1", call_id: "toolu_1" });
+  assert.equal(out.params._meta.progressToken, 4);
+  assert.deepEqual(out.params.arguments, { code: "1" });
+  assert.equal(msg.params._meta["x-codex-turn-metadata"], undefined, "the original message is unchanged");
 });

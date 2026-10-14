@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.1 - 2026-10-13
+
+- Send Codex turn metadata (`session_id`, `turn_id`, and the tool-use id as
+  `call_id`) with each computer-use call, and the same ids with `turn_ended`.
+  The browser service requires them: in 0.6.0, `cua.getState()` listed apps
+  but reported "Missing required Codex turn metadata" for browsers. The
+  launcher owns the ids, so a subagent's turn end also starts a new turn for
+  the main conversation.
+
 ## 0.6.0 - 2026-10-13
 
 - Give Claude Codex's computer use directly. The `computer-use` MCP server

@@ -10,13 +10,14 @@
 // ChatGPT app installs, read at spawn time so app updates keep working. These
 // are unofficial OpenAI internals and may change with any app update.
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 import { approvalPolicyFromToml } from "../hooks/computer-use.js";
 
-const VERSION = "0.6.0";
+const VERSION = "0.6.1";
 const SUPPORTED_PROTOCOLS = ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"];
 const INIT_ID = "cdx-cu-init";
 
@@ -156,6 +157,25 @@ export function isComputerUseApproval(msg) {
   return msg?.method === "elicitation/create" && msg.params?._meta?.connector_id === "computer-use";
 }
 
+// Codex sends turn metadata with every call, and the browser service requires
+// it (session_id, turn_id) and releases a turn's tabs on turn_ended with the
+// same ids. Claude Code sends neither, so the launcher owns them: one session
+// for its life, and a turn that ends at each turn_ended. Subagents share this
+// connection, so any agent's turn end starts a new turn for all of them.
+const sessionId = randomUUID();
+let turnId = randomUUID();
+
+export function withTurnMetadata(msg, ids) {
+  const meta = { ...(msg.params?._meta ?? {}) };
+  const callId = meta["claudecode/toolUseId"];
+  meta["x-codex-turn-metadata"] = JSON.stringify({
+    session_id: ids.sessionId,
+    turn_id: ids.turnId,
+    ...(typeof callId === "string" ? { call_id: callId } : {}),
+  });
+  return { ...msg, params: { ...msg.params, _meta: meta } };
+}
+
 let clientInit = null; // the client's initialize params, replayed to the real server
 let child = null;
 let starting = null;
@@ -234,7 +254,7 @@ async function forwardCall(msg) {
   const started = child ? { child } : await startChild();
   if (started.error) return toolError(msg.id, started.error);
   forwarded.set(msg.id, msg.method);
-  started.child.stdin.write(JSON.stringify(msg) + "\n");
+  started.child.stdin.write(JSON.stringify(withTurnMetadata(msg, { sessionId, turnId })) + "\n");
 }
 
 function handle(msg) {
@@ -265,10 +285,13 @@ function handle(msg) {
     case "tools/call": {
       const name = msg.params?.name;
       if (name === "turn_ended") {
+        const ended = turnId;
+        turnId = randomUUID();
         // Nothing to clean up when the runtime never started.
         if (!child) return reply(msg.id, { content: [], isError: false });
+        const args = { ...msg.params?.arguments, session_id: sessionId, turn_id: ended };
         forwarded.set(msg.id, msg.method);
-        child.stdin.write(JSON.stringify(msg) + "\n");
+        child.stdin.write(JSON.stringify({ ...msg, params: { ...msg.params, arguments: args } }) + "\n");
         return;
       }
       if (name === "js" || name === "js_reset") {
