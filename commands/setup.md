@@ -40,6 +40,10 @@ $ARGUMENTS
    capability/target. Require the
    actual tool and observed connection result. Do not operate unrelated
    tabs or apps, change permissions, or install plugins to pass a check.
+   Also check cdx's own `computer-use` server: confirm
+   `mcp__plugin_cdx_computer-use__js` is available, and with `--smoke` call it
+   once with `await cua.getState();`. Report a tool error (no ChatGPT app or
+   no unified-computer-use plugin) as the missing prerequisite.
 
 Report CLI version, authentication, runner compatibility, and whether a
 live smoke test passed, failed, or was not run. Keep the report compact.

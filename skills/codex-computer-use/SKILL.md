@@ -1,16 +1,48 @@
 ---
 name: codex-computer-use
-description: Delegate desktop app, browser, and visual verification tasks from Claude to Codex using its Computer Use, Chrome, or built-in browser plugins. Use when the user asks Codex to operate a UI, use a signed-in browser or named profile, or handle a workflow Claude cannot reach directly.
+description: Operate desktop apps and browsers with Codex Computer Use, either directly through cdx's computer-use tools or by delegating to Codex with its Computer Use, Chrome, or built-in browser plugins. Use when the user wants an app or browser UI operated, a signed-in browser or named profile used, a visual result verified, or a workflow handled that other tools cannot reach.
 ---
 
 # Codex Computer Use and browsers
 
-Use Codex for a bounded desktop or browser task when its installed plugins
-provide the access the task needs. Follow `cdx:driving-codex` for the runner
-and `cdx:prompting-codex` for the task prompt. cdx delegates to the plugins
-available in that Codex session; it does not bundle or enable them.
+There are two ways to run a desktop or browser task: drive Codex's computer
+use directly with cdx's `computer-use` tools, or delegate the task to Codex.
 
-## Announce the handoff
+## Choose who drives
+
+- **Drive it directly** (the default when the user wants Claude to do it):
+  short UI tasks, checks, and steps inside a larger task Claude is running.
+- **Delegate to Codex** when the user names Codex, or for a long UI task whose
+  screenshots and UI state would fill Claude's context. Follow
+  `cdx:driving-codex` for the runner and `cdx:prompting-codex` for the prompt.
+
+## Drive it directly
+
+cdx's MCP server `computer-use` exposes the ChatGPT app's computer-use runtime
+(`cua_repl`) as `mcp__plugin_cdx_computer-use__js` and `js_reset`. It starts
+the runtime on the first `js` call and needs the ChatGPT desktop app with
+Codex Computer Use installed; a missing app comes back as a tool error.
+These are unofficial OpenAI internals and can change with an app update.
+
+- Start with exactly one entry call, as the tool description says, and read
+  the documentation it returns before anything else. Use only documented APIs.
+- Act on the user's request without stopping to confirm each step. The user's
+  request is the authorization; stop only at a boundary the request names or
+  for a sign-in, OS permission, or security prompt that needs the user.
+- Approvals follow the user's Codex `approval_policy`. With `"never"`, app
+  access and the tools' permission checks are approved automatically, as in
+  Codex; otherwise Claude Code and the runtime ask as usual. An app blocked by
+  organization policy or for safety reasons stays blocked.
+- Read back the observable result (a display value, a saved setting) before
+  reporting success. One agent at a time per app or browser profile.
+- `turn_ended` is called automatically at the end of each turn; never call it.
+
+## Delegate to Codex
+
+Delegation uses the plugins available in that Codex session; cdx does not
+install or enable them.
+
+### Announce the handoff
 
 Before launching, tell the user that Claude is delegating to Codex. Name the
 requested plugin or capability, the task, and the target app or browser/profile.
@@ -23,7 +55,7 @@ This announces the intended tools. Afterward, report the tools actually used
 and whether the requested work was verified, partial, or blocked. Do not claim
 plugin use from a successful CLI exit or a plugin listing alone.
 
-## Select and verify the target
+### Select and verify the target
 
 | Task | Instruction to Codex |
 |---|---|
@@ -44,7 +76,7 @@ may not exist in a terminal-launched Codex session. Have Codex discover the
 target through its own tools, match it against the supplied context, and report
 any ambiguity before acting on that target.
 
-## Check availability inside the delegated session
+### Check availability inside the delegated session
 
 For setup or troubleshooting, inspect `codex plugin list --json`, including
 `installed`, `enabled`, and any catalog errors. On 2026-09-07, the inspected
@@ -70,7 +102,7 @@ Complete independent authorized work. Carry earlier authorization forward;
 ask only for genuinely missing access or decisions. Do not change permissions,
 install plugins, or broaden access just to make a probe pass.
 
-## Preserve scope and verify the result
+### Preserve scope and verify the result
 
 The runner's `--sandbox ro` constrains shell/filesystem access; it does not make
 browser or app actions read-only. Include the authorized actions and relevant
@@ -90,7 +122,7 @@ result that proves completion. Return the actual tool/capability, target,
 actions, verification, blockers, and session id. Inspect available evidence
 without replaying completed mutations just to verify the report.
 
-## Delegated prompt template
+### Delegated prompt template
 
 ```text
 Use Codex's <Computer Use and/or Chrome/browser/built-in browser> plugin to

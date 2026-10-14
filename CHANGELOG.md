@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.0 - 2026-10-13
+
+- Give Claude Codex's computer use directly. The `computer-use` MCP server
+  (`scripts/codex-cu-mcp.mjs`) exposes the ChatGPT app's `cua_repl` runtime as
+  `js` and `js_reset`. It starts the runtime on the first call, reads the
+  newest installed unified-computer-use config each time, and returns a tool
+  error when the app or plugin is missing. Unofficial OpenAI internals.
+- Follow the user's Codex `approval_policy` for computer use: with `"never"`,
+  app-access approvals and the tools' permission check are accepted
+  automatically; otherwise they ask as usual.
+- The cdx mod calls the runtime's `turn_ended` at the end of each turn,
+  subagent turn, and interrupt, as Codex does.
+- `codex-computer-use` now routes short UI tasks to Claude's own computer use
+  and long ones, or ones that name Codex, to Codex.
+
 ## 0.5.1 - 2026-10-13
 
 - Report Codex error items under `--- warnings ---` instead of

@@ -58,7 +58,7 @@ supported; use the marketplace matching your existing installation.
 | `/cdx:fleet` | 2–4 parallel Codex workers: decomposed subtasks, multi-angle opinions, A/B implementations |
 | `/cdx:session` | `list`, `resume <id\|--last>`, `fork <id>`, `apply <task_id>` |
 | `/cdx:cloud` | Codex Cloud: `exec`, `list`, `status`, `diff`, `apply` |
-| `/cdx:setup` | Doctor: install, auth, version drift, runner compatibility, live smoke. `--plugins` checks browser/Computer Use installation; add `--smoke` for a non-mutating runtime probe. |
+| `/cdx:setup` | Doctor: install, auth, version drift, runner compatibility, live smoke. `--plugins` checks browser/Computer Use installation and the `computer-use` server; add `--smoke` for a non-mutating runtime probe. |
 
 ## Skills
 
@@ -71,8 +71,9 @@ supported; use the marketplace matching your existing installation.
   version).
 - **codex-structured-output**: bundled schema library (`review-findings`,
   `verdict`, `task-report`, `patch-plan`) + rules for ad-hoc schemas.
-- **codex-computer-use**: explicit plugin handoffs, browser/profile selection,
-  live capability checks, app and page verification, and shared UI coordination.
+- **codex-computer-use**: when Claude drives computer use itself and when it
+  delegates to Codex; explicit plugin handoffs, browser/profile selection, live
+  capability checks, app and page verification, and shared UI coordination.
 - **prompting-codex**: task framing, authorization, and proportional verification,
   with GPT-6 Astra guidance. Original templates were adapted from
   openai/codex-plugin-cc (Apache-2.0, see NOTICE).
@@ -101,7 +102,34 @@ Codex's commands run under its own sandbox, not Claude Code's permission
 prompts. Mods need Claude Code CLI 2.1.287 or later and do not load under
 `--safe-mode` or `disableAllHooks`; the runner and commands work without them.
 
-## Computer Use and browsers
+## Computer use for Claude
+
+cdx also gives Claude Codex's computer use directly. Its `computer-use` MCP
+server exposes the ChatGPT desktop app's computer-use runtime (`cua_repl`) as
+`mcp__plugin_cdx_computer-use__js`, so Claude can operate Mac apps and browsers
+itself:
+
+```text
+Open Calculator and work out 12 × 12.
+```
+
+The server starts the runtime on the first call and finds the newest installed
+version, so ChatGPT updates keep working. It needs macOS and the ChatGPT app
+with Codex Computer Use; without them the tool returns an error and nothing
+else changes. While in use, the runtime's processes take several hundred MB
+(about 690 MB RSS measured with the 26.1007 app) and exit with the session.
+
+Approvals follow your Codex `approval_policy`. With `"never"`, app-access
+approvals and Claude Code's permission check for these tools are accepted
+automatically, as they are in Codex; otherwise both ask as usual. The cdx mod
+also tells the runtime when each turn ends, as Codex does, so it can release
+browser tabs.
+
+This uses unofficial OpenAI internals, not a published API. An update to the
+ChatGPT app can change or break it. Set `CDX_CU_TRACE=<file>` to log the MCP
+messages when troubleshooting.
+
+## Delegating Computer Use and browsers to Codex
 
 Ask Claude to delegate a UI task to Codex when Codex's installed plugins have
 the app or browser access the task needs:

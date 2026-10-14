@@ -1,4 +1,5 @@
-// cdx mod: Codex as Agent tool subagents. Registers cdx:codex-sol,
+// cdx mod: Codex as Agent tool subagents, and turn-end notices for the
+// computer-use server (scripts/codex-cu-mcp.mjs). Registers cdx:codex-sol,
 // cdx:codex-luna, and cdx:codex-astra, whose model ids carry a prefix
 // (MODEL_PREFIX). Each request such an agent makes is answered here by running
 // the Codex runner, so the Agent tool spawns Codex and SendMessage resumes its
@@ -17,8 +18,54 @@ import {
   sessionOfProgress,
   threadIdOf,
 } from "./codex-agent.js";
+import { COMPUTER_USE_TOOL, approvalPolicyFromToml } from "./computer-use.js";
+
+// Tells the computer-use runtime that a turn ended, as Codex does from its
+// Stop, SubagentStop, and Interrupt hooks, so it can release what the turn held
+// (attached browser tabs). The launcher answers at once when the runtime never
+// started, so turns without computer use start nothing.
+async function endComputerUseTurn($, e) {
+  try {
+    const connected = await $.mcp.connect("computer-use");
+    if (!connected.isConnected) return;
+    const hookEventName = e.isAborted ? "Interrupt" : e.agentId ? "SubagentStop" : "Stop";
+    const sessionId = e.agentId ?? (await $.session.id());
+    await $.mcp.call(connected.server, "turn_ended", {
+      hook_event_name: hookEventName,
+      session_id: sessionId,
+      turn_id: e.turnId,
+    });
+  } catch (err) {
+    $.ui.log(`cdx: computer-use turn_ended failed: ${err?.message ?? err}`, { to: "debug" });
+  }
+}
+
+async function codexApprovalPolicy($) {
+  const home = (await $.env.get("CODEX_HOME")) || `${await $.env.get("HOME")}/.codex`;
+  const text = await $.fs.read(`${home}/config.toml`).catch(() => null);
+  return approvalPolicyFromToml(text);
+}
 
 export function register(on) {
+  // Computer use follows the user's Codex approval policy: with
+  // approval_policy = "never", cdx's computer-use tools run without a prompt,
+  // as they do in Codex. Only an `ask` becomes `allow`; a deny stays. If the
+  // hook fails, the usual decision stands.
+  on("tool.check", { tool: COMPUTER_USE_TOOL }, async ($, e, next) => {
+    const decided = await next(e);
+    if (decided.decision !== "ask") return decided;
+    if ((await codexApprovalPolicy($)) !== "never") return decided;
+    return { decision: "allow", reason: 'Codex approval_policy is "never"; cdx computer use follows it.' };
+  }).catch(($, e, next) => next(e));
+
+  on("turn.complete", async ($, e, next) => {
+    const result = await next(e);
+    // Awaited so the notice is sent before a headless session exits; the
+    // launcher answers at once when the runtime is not running.
+    await endComputerUseTurn($, e);
+    return result;
+  });
+
   on("session.start", async ($, e, next) => {
     const started = await next(e);
     for (const agent of AGENTS) {

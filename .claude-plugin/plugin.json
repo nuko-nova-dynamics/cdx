@@ -1,7 +1,7 @@
 {
   "name": "cdx",
-  "version": "0.5.1",
-  "description": "Delegate coding, Computer Use, and browser tasks from Claude Code to Codex with explicit plugin and profile selection, verified results, structured reviews, and session controls.",
+  "version": "0.6.0",
+  "description": "Delegate coding, Computer Use, and browser tasks from Claude Code to Codex, run Codex as Agent tool subagents, and give Claude Codex's computer use directly, with verified results, structured reviews, and session controls.",
   "author": {
     "name": "Nuko Nova Dynamics",
     "email": "hello@nukonova.com"
@@ -9,5 +9,5 @@
   "homepage": "https://github.com/nuko-nova-dynamics/cdx",
   "repository": "https://github.com/nuko-nova-dynamics/cdx",
   "license": "Apache-2.0",
-  "keywords": ["codex", "subagent", "mod", "openai", "delegation", "code-review", "multi-model", "computer-use", "browser"]
+  "keywords": ["codex", "subagent", "mod", "mcp", "openai", "delegation", "code-review", "multi-model", "computer-use", "browser"]
 }
