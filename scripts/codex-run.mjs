@@ -7,6 +7,7 @@ import { mkdtempSync, mkdirSync, createWriteStream, readFileSync, existsSync, wr
 import { finished } from "node:stream/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import readline from "node:readline";
 
 const SANDBOX_MAP = { ro: "read-only", write: "workspace-write", full: "danger-full-access" };
@@ -18,7 +19,7 @@ const LOCAL_PROVIDERS = new Set(["lmstudio", "ollama"]);
 const USAGE = "usage: codex-run.mjs --sandbox <ro|write|full> [--model <m|spark>] [--effort <e>] [--fast] [--search] [--lean] " +
   "[--approve-for-me] [--image <f>]... [--schema <path>] [--resume <id|last> | --fork <id>] " +
   "[--local [lmstudio|ollama]] [--add-dir <d>]... [--cd <dir>] [-c k=v]... " +
-  "[--ephemeral] [--scratch <dir>] [--progress] -- <prompt...>\n";
+  "[--ephemeral] [--scratch <dir>] [--progress] [--claude-channel] -- <prompt...>\n";
 
 function die(msg) {
   process.stderr.write(`codex-run: ${msg}\n${USAGE}`);
@@ -79,6 +80,8 @@ function parseArgs(argv) {
       o.scratch = next(a);
     } else if (a === "--progress") {
       o.progress = true;
+    } else if (a === "--claude-channel") {
+      o.claudeChannel = true;
     } else if (a.startsWith("-")) {
       die(`unknown flag: ${a}`);
     } else {
@@ -167,6 +170,17 @@ const gitCheck = spawnSync("git", ["-C", workRoot, "rev-parse", "--is-inside-wor
 if (gitCheck.status !== 0) argv.push("--skip-git-repo-check");
 
 if (opts.search) argv.push("-c", `web_search="live"`);
+// The cdx agents give Codex a message_claude tool. Its server only
+// acknowledges; the text reaches Claude from the event stream below. The tool
+// is pre-approved, since `codex exec` refuses an MCP call that needs approval.
+if (opts.claudeChannel) {
+  const server = path.join(path.dirname(fileURLToPath(import.meta.url)), "claude-channel-mcp.mjs");
+  argv.push(
+    "-c", `mcp_servers.cdx_claude.command=${JSON.stringify(process.execPath)}`,
+    "-c", `mcp_servers.cdx_claude.args=[${JSON.stringify(server)}]`,
+    "-c", `mcp_servers.cdx_claude.tools.message_claude.approval_mode="approve"`,
+  );
+}
 // Fast is a model-dependent service tier, independent of reasoning effort.
 if (opts.fast) argv.push("-c", `service_tier="fast"`);
 // Model and effort precedence: explicit flag, then CDX_DEFAULT_MODEL /
@@ -214,6 +228,31 @@ const state = {
   itemCounts: {},
 };
 
+// The tool's schema caps a message at MESSAGE_MAX characters; a longer one is
+// cut at a code point (never inside a surrogate pair) and marked as cut.
+const MESSAGE_MAX = 4000;
+function capMessage(text) {
+  const chars = Array.from(text);
+  return chars.length <= MESSAGE_MAX ? text : chars.slice(0, MESSAGE_MAX).join("") + " [cut at 4000 characters]";
+}
+
+// The text of a completed message_claude call, or null for any other event.
+function claudeMessage(ev) {
+  const item = ev.item ?? {};
+  if (ev.type !== "item.completed" || item.type !== "mcp_tool_call") return null;
+  if (item.server !== "cdx_claude" || item.tool !== "message_claude" || item.status !== "completed") return null;
+  let args = item.arguments;
+  if (typeof args === "string") {
+    try {
+      args = JSON.parse(args);
+    } catch {
+      return null;
+    }
+  }
+  const text = typeof args?.text === "string" ? args.text.trim() : "";
+  return text || null;
+}
+
 // One stderr line for the session id as soon as Codex assigns it, then one per
 // command, file change, tool call, or search, for callers that show live
 // progress (the cdx Codex agents). Fields absent from an event fall back to the
@@ -241,6 +280,10 @@ rl.on("line", (line) => {
     ev = JSON.parse(line);
   } catch {
     return; // non-JSON noise
+  }
+  if (opts.claudeChannel) {
+    const message = claudeMessage(ev);
+    if (message) process.stderr.write(`cdx-message: ${JSON.stringify(capMessage(message))}\n`);
   }
   if (opts.progress) {
     const p = progressLine(ev);

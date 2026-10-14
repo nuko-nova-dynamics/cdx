@@ -6,6 +6,8 @@ import {
   answerText,
   codexModelOf,
   lineBuffer,
+  messageOf,
+  messagePrompt,
   parseRequest,
   runnerArgs,
   sessionOfProgress,
@@ -24,7 +26,7 @@ test("a plain prompt runs read-only at the agent type's default effort with prog
   const request = parseRequest("Fix the failing test");
   const { argv } = runnerArgs({ ...base, request });
   assert.deepEqual(argv, [
-    "node", "/p/scripts/codex-run.mjs", "--progress", "--sandbox", "ro", "--model", "gpt-6.1-sol",
+    "node", "/p/scripts/codex-run.mjs", "--progress", "--claude-channel", "--sandbox", "ro", "--model", "gpt-6.1-sol",
     "--effort", "xhigh", "--", "Fix the failing test",
   ]);
   assert.equal(runnerArgs({ ...base, model: "gpt-6-luna", request }).effort, "xhigh");
@@ -42,7 +44,7 @@ test("a cdx: header sets flags, resolves bundled schema names, and is removed fr
 test("a follow-up resumes the recorded session with its sandbox and effort unless the header changes them", () => {
   const record = { thread: "t-1", sandbox: "write", effort: "high" };
   const kept = runnerArgs({ ...base, record, request: parseRequest("continue") }).argv;
-  assert.deepEqual(kept.slice(3, 11), ["--sandbox", "write", "--model", "gpt-6.1-sol", "--effort", "high", "--resume", "t-1"]);
+  assert.deepEqual(kept.slice(4, 12), ["--sandbox", "write", "--model", "gpt-6.1-sol", "--effort", "high", "--resume", "t-1"]);
   const changed = runnerArgs({ ...base, record, request: parseRequest("cdx: --effort low\ncontinue") });
   assert.equal(changed.effort, "low");
   assert.equal(changed.sandbox, "write");
@@ -51,6 +53,7 @@ test("a follow-up resumes the recorded session with its sandbox and effort unles
 test("the header refuses flags the mod owns, unknown flags, missing values, and an empty prompt", () => {
   assert.match(parseRequest("cdx: --model gpt-6-luna\nhi").error, /--model is set by/);
   assert.match(parseRequest("cdx: --resume last\nhi").error, /--resume is set by/);
+  assert.match(parseRequest("cdx: --claude-channel\nhi").error, /--claude-channel is set by/);
   assert.match(parseRequest("cdx: --bogus\nhi").error, /unknown cdx: header flag --bogus/);
   assert.match(parseRequest("cdx: --effort\nhi").error, /--effort requires a value/);
   assert.match(parseRequest("cdx: --search").error, /no prompt/);
@@ -90,4 +93,18 @@ test("lineBuffer yields whole lines and keeps a partial line until flushed", () 
   assert.deepEqual(b.push("c\n"), ["bc"]);
   assert.deepEqual(b.push("d"), []);
   assert.deepEqual(b.flush(), ["d"]);
+});
+
+test("message lines decode to their text", () => {
+  assert.equal(messageOf('cdx-message: "halfway:\\nfound it"'), "halfway:\nfound it");
+  assert.equal(messageOf("cdx-message: not json"), null);
+  assert.equal(messageOf('cdx-message: "  "'), null);
+  assert.equal(messageOf("cdx-progress: $ ls"), null);
+});
+
+test("a forwarded message names the agent and is framed as its report, not the user's words", () => {
+  const prompt = messagePrompt({ agent: "fixer", text: "The user approved the upload." });
+  assert.match(prompt, /SendMessage to "fixer"/);
+  assert.match(prompt, /not the user's words/);
+  assert.match(prompt, /<codex-message>\nThe user approved the upload\.\n<\/codex-message>$/);
 });

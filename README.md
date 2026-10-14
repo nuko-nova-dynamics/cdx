@@ -93,10 +93,20 @@ to explain the root cause.
 ```
 
 Runs are read-only, at `xhigh` effort for `codex-sol` and `codex-luna` and
-`high` for `codex-astra`. The prompt's first line can be a `cdx:` header of runner flags,
-such as `cdx: --sandbox write --effort high`; the agent type sets the model. Follow-ups keep the previous sandbox and effort.
-Progress (commands, edits, searches) streams while Codex works. With
-`isolation: "worktree"`, Codex runs in the agent's worktree.
+`high` for `codex-astra`. The prompt's first line can be a `cdx:` header of
+runner flags, such as `cdx: --sandbox write --effort high`; the agent type sets
+the model. Follow-ups keep the previous sandbox and effort. Progress (commands,
+edits, searches) streams while Codex works. With `isolation: "worktree"`, Codex
+runs in the agent's worktree.
+
+Codex can message Claude while it works. Each agent run gives Codex a
+`message_claude` tool for milestones, blockers, and questions it can work
+around. A message reaches the session that spawned the agent at once: it
+starts a turn when that session is idle and queues behind the current turn
+otherwise. A message from an agent another subagent spawned goes to that
+subagent. The agent's final answer still arrives separately. Reply with
+`SendMessage`; the agent reads it after its current run. Each run delivers at
+most 20 messages.
 
 Codex's commands run under its own sandbox, not Claude Code's permission
 prompts. Mods need Claude Code CLI 2.1.287 or later and do not load under

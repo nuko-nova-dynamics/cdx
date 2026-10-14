@@ -336,3 +336,35 @@ test("error items are reported as warnings, not errors, and do not fail the run"
   assert.doesNotMatch(r.stdout, /--- errors ---/);
   assert.match(r.stderr, /cdx-progress: warning Under-development features enabled: demo/);
 });
+
+test("--claude-channel gives Codex a pre-approved message_claude tool and reports each completed call", (t) => {
+  const r = isolatedRun(t, ["--sandbox", "ro", "--claude-channel", "--", "say hi"], { FAKE_CODEX_MODE: "message" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(r.args.some((a) => /^mcp_servers\.cdx_claude\.args=\[".*claude-channel-mcp\.mjs"\]$/.test(a)));
+  assert.ok(r.args.includes('mcp_servers.cdx_claude.tools.message_claude.approval_mode="approve"'));
+  assert.equal(r.stderr, 'cdx-message: "halfway:\\nfound it"\n', "one line per completed call, none for a failed one");
+  const plain = isolatedRun(t, ["--sandbox", "ro", "--", "say hi"], { FAKE_CODEX_MODE: "message" });
+  assert.equal(plain.stderr, "");
+  assert.ok(!plain.args.some((a) => a.startsWith("mcp_servers.cdx_claude")));
+});
+
+test("a message over 4000 characters is cut at a code point and marked", () => {
+  const text = "a".repeat(3999) + "\u{1F600}" + "tail";
+  const r = run(["--sandbox", "ro", "--claude-channel", "--", "say hi"], { FAKE_CODEX_MODE: "message", FAKE_CODEX_MESSAGE: text });
+  assert.equal(r.status, 0, r.stderr);
+  const sent = JSON.parse(r.stderr.trim().slice("cdx-message: ".length));
+  assert.equal(sent, "a".repeat(3999) + "\u{1F600} [cut at 4000 characters]");
+});
+
+test("the message_claude server ignores non-object input and refuses calls past its limit", () => {
+  const server = new URL("../scripts/claude-channel-mcp.mjs", import.meta.url).pathname;
+  const call = (id) => JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name: "message_claude", arguments: { text: "x" } } });
+  const input = ["null", JSON.stringify({ jsonrpc: "2.0", id: 0, method: "ping" }), ...Array.from({ length: 21 }, (_, i) => call(i + 1))].join("\n") + "\n";
+  const r = spawnSync("node", [server], { input, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  const replies = r.stdout.trim().split("\n").map((l) => JSON.parse(l));
+  assert.deepEqual(replies[0], { jsonrpc: "2.0", id: 0, result: {} });
+  assert.equal(replies.length, 22);
+  assert.ok(replies.slice(1, 21).every((m) => !m.result.isError));
+  assert.equal(replies[21].result.isError, true);
+});

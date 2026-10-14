@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.4 - 2026-10-14
+
+- Codex agents can message Claude while they run. Each agent run gives Codex
+  a pre-approved `message_claude` tool (a small MCP server, through the new
+  runner flag `--claude-channel`). The runner reports each completed call
+  from Codex's event stream, and the mod delivers it to whoever spawned the
+  agent: the main session through `$.prompt.submit`, which starts a turn
+  when the session is idle, or a spawning subagent through `$.session.send`.
+  At most 20 messages per run; the tool refuses later calls so Codex knows,
+  and a message over 4,000 characters is cut at a character boundary and
+  marked. A message reaches Claude framed as the agent's report, never as
+  the user's words or approval, and one whose spawner cannot be resolved is
+  logged and not delivered rather than sent to the main session. Tested end to
+  end with a background agent: both messages arrived as new turns while it
+  ran, before its final answer.
+
 ## 0.6.3 - 2026-10-13
 
 - Default efforts are now set per agent type: `codex-sol` and `codex-luna`

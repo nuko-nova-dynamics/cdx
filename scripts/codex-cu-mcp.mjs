@@ -17,7 +17,7 @@ import path from "node:path";
 import readline from "node:readline";
 import { approvalPolicyFromToml } from "../hooks/computer-use.js";
 
-const VERSION = "0.6.3";
+const VERSION = "0.6.4";
 const SUPPORTED_PROTOCOLS = ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"];
 const INIT_ID = "cdx-cu-init";
 

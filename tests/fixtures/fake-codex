@@ -25,6 +25,12 @@ if (mode === "fork-only") {
     if (mode === "warning") {
       event({ type: "item.completed", item: { id: "item_w", type: "error", message: "Under-development features enabled: demo" } });
     }
+    if (mode === "message") {
+      const call = { id: "item_m", type: "mcp_tool_call", server: "cdx_claude", tool: "message_claude", arguments: { text: process.env.FAKE_CODEX_MESSAGE ?? "halfway:\nfound it" } };
+      event({ type: "item.started", item: { ...call, status: "in_progress" } });
+      event({ type: "item.completed", item: { ...call, status: "completed" } });
+      event({ type: "item.completed", item: { ...call, id: "item_f", arguments: { text: "refused" }, status: "failed" } });
+    }
     event({ type: "item.started", item: { id: "item_0", type: "command_execution", command: "ls" } });
     event({ type: "item.completed", item: { id: "item_0", type: "command_execution", command: "ls" } });
     process.stdout.write("not json garbage line\n");

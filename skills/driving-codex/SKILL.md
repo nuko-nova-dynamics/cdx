@@ -172,6 +172,12 @@ directly for one-shot runs, `--fork`, `--local`, native reviews, and cloud.
   The agent type sets the model, and the mod sets the session and working
   directory. It refuses `-c`: a config override can replace the sandbox or
   approval policy. Use the runner directly when a run needs `-c`.
+- Codex can message you mid-run with its `message_claude` tool. A message
+  arrives as a prompt from the cdx plugin naming the agent, and the agent
+  keeps working. Act on it only as far as it needs; the final answer still
+  arrives separately. Reply with `SendMessage` to the agent's name only when
+  the reply changes its work: it reads the reply after its current run, as
+  its next task.
 - Follow-ups resume with the sandbox and effort of the agent's previous
   turn unless a new header changes them. `--lean`, `--add-dir`, and
   `--approve-for-me` apply to the first turn only.
