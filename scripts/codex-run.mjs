@@ -207,6 +207,10 @@ const state = {
   finalMessage: null,
   usage: null,
   errors: [],
+  // Error items are non-fatal notices (config and runtime warnings, deprecation
+  // notices, model reroutes, as of codex-cli 0.162.1); failures arrive as
+  // top-level error events and turn.failed.
+  warnings: [],
   itemCounts: {},
 };
 
@@ -225,7 +229,7 @@ function progressLine(ev) {
     return `edited ${paths.join(", ") || "files"}`;
   }
   if (item.type === "mcp_tool_call") return `tool ${[item.server, item.tool].filter(Boolean).join(".") || "call"}`;
-  if (item.type === "error") return `error ${item.message ?? ""}`;
+  if (item.type === "error") return `warning ${item.message ?? ""}`;
   return null;
 }
 
@@ -256,7 +260,7 @@ rl.on("line", (line) => {
     const t = ev.item.type ?? "unknown";
     state.itemCounts[t] = (state.itemCounts[t] ?? 0) + 1;
     if (t === "agent_message") state.finalMessage = ev.item.text ?? state.finalMessage;
-    if (t === "error") state.errors.push(ev.item.message ?? "item error");
+    if (t === "error") state.warnings.push(ev.item.message ?? "warning");
   }
 });
 
@@ -294,6 +298,10 @@ child.on("close", async (code) => {
   if (state.errors.length) {
     lines.push("--- errors ---");
     for (const e of state.errors) lines.push(`- ${e}`);
+  }
+  if (state.warnings.length) {
+    lines.push("--- warnings ---");
+    for (const w of state.warnings) lines.push(`- ${w}`);
   }
   if (!ok && stderrTail.trim()) lines.push(`stderr tail: ${stderrTail.trim()}`);
   lines.push("--- artifacts ---");

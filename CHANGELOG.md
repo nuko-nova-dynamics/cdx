@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.1 - 2026-10-13
+
+- Report Codex error items under `--- warnings ---` instead of
+  `--- errors ---`. In codex-cli 0.162.1 these items carry only non-fatal
+  notices: config and runtime warnings, deprecation notices, and model
+  reroutes. Failures still come from top-level error events and
+  `turn.failed`, and a warning no longer fails a fork-only run.
+  `--progress` labels these lines `warning`.
+
 ## 0.5.0 - 2026-10-13
 
 - Add a mod that registers `cdx:codex-sol`, `cdx:codex-luna`, and

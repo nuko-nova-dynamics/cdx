@@ -327,3 +327,12 @@ test("--progress writes the session id, then one stderr line per command, and ke
   assert.match(r.stdout, /fake done/);
   assert.equal(run(["--sandbox", "ro", "--", "say hi"]).stderr, "", "no progress without the flag");
 });
+
+test("error items are reported as warnings, not errors, and do not fail the run", () => {
+  const r = run(["--sandbox", "ro", "--progress", "--", "say hi"], { FAKE_CODEX_MODE: "warning" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /status: completed/);
+  assert.match(r.stdout, /--- warnings ---\n- Under-development features enabled: demo/);
+  assert.doesNotMatch(r.stdout, /--- errors ---/);
+  assert.match(r.stderr, /cdx-progress: warning Under-development features enabled: demo/);
+});
