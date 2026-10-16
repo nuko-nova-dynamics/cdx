@@ -15,12 +15,14 @@ import {
   agentSpec,
   answerText,
   codexModelOf,
+  isTeammateRequest,
   lineBuffer,
   messageOf,
   messagePrompt,
   parseRequest,
   runnerArgs,
   sessionOfProgress,
+  teammateAnswer,
   threadIdOf,
 } from "./codex-agent.js";
 import { COMPUTER_USE_TOOL, approvalPolicyFromToml } from "./computer-use.js";
@@ -226,6 +228,7 @@ export function register(on) {
       if (thread && !reported) await save(thread);
       text = answerText({ stdout, stderrLines, ...ended });
     }
+    if (isTeammateRequest(last?.text)) text = teammateAnswer(text);
 
     yield { kind: "text", index: block, text };
     yield { kind: "stop", stopReason: "end_turn", usage: null };

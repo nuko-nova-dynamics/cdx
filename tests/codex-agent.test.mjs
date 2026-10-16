@@ -5,12 +5,15 @@ import {
   agentSpec,
   answerText,
   codexModelOf,
+  isTeammateRequest,
   lineBuffer,
   messageOf,
   messagePrompt,
   parseRequest,
   runnerArgs,
   sessionOfProgress,
+  TEAMMATE_ANSWER_LIMIT,
+  teammateAnswer,
   threadIdOf,
 } from "../hooks/codex-agent.js";
 
@@ -85,6 +88,37 @@ test("the answer is the runner summary, or the failure with stderr; the session 
   const failed = answerText({ stdout: "", stderrLines: ["codex-run: invalid --sandbox: x"], code: 2, signal: null });
   assert.match(failed, /did not complete \(exit 2\)/);
   assert.match(failed, /invalid --sandbox: x/);
+});
+
+test("only a request made of teammate envelopes is a teammate request", () => {
+  assert.equal(isTeammateRequest('<teammate-message teammate_id="team-lead">\nReview.\n</teammate-message>'), true);
+  assert.equal(isTeammateRequest("Review."), false);
+  assert.equal(isTeammateRequest('<teammate-message teammate_id="a">\nhi\n</teammate-message> and more'), false);
+});
+
+const runnerSummary = (message) =>
+  "session: abc\nstatus: completed\nitems: agent_message=1\ntokens: input=1 cached=0 output=1\n" +
+  `--- final message ---\n${message}\n--- warnings ---\n- unstable feature\n` +
+  "--- artifacts ---\nevents: /t/events.jsonl\nlast-message: /t/last-message.txt\nstderr: /t/stderr.log\n";
+
+test("a teammate answer puts the final message first and keeps every runner detail after it", () => {
+  const answer = teammateAnswer(runnerSummary("All clear."));
+  assert.match(answer, /^All clear\.\n\n---\nsession: abc\nstatus: completed\n/);
+  assert.match(answer, /--- warnings ---\n- unstable feature\n--- artifacts ---\n/);
+  assert.match(answer, /last-message: \/t\/last-message\.txt\nstderr: \/t\/stderr\.log$/);
+  assert.doesNotMatch(answer, /cdx cut/);
+});
+
+test("a long teammate answer is cut at a line break under the limit and names the full message's file", () => {
+  const message = Array.from({ length: 200 }, (_, i) => `finding ${i}: ${"x".repeat(40)}`).join("\n");
+  const answer = teammateAnswer(runnerSummary(message));
+  assert.ok(answer.length <= TEAMMATE_ANSWER_LIMIT, `${answer.length}`);
+  assert.match(answer, /^finding 0: /);
+  assert.match(answer, /x\n\n\[cdx cut this answer at \d+ of \d+ characters .*the full message is in \/t\/last-message\.txt\]/);
+  assert.match(answer, /status: completed[\s\S]*last-message: \/t\/last-message\.txt\nstderr: \/t\/stderr\.log$/, "the footer survives");
+  const failure = teammateAnswer(`cdx: the Codex runner did not complete (exit 1).\n\nstderr:\n${"e\n".repeat(3000)}`);
+  assert.ok(failure.length <= TEAMMATE_ANSWER_LIMIT);
+  assert.match(failure, /^cdx: the Codex runner did not complete[\s\S]*ask the agent for the rest\]$/);
 });
 
 test("lineBuffer yields whole lines and keeps a partial line until flushed", () => {

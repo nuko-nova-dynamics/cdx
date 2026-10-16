@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.2 - 2026-10-16
+
+- Codex teammates no longer lose the end of long answers. Claude Code cuts a
+  teammate's final answer at about 4,000 characters before the lead sees it,
+  and the runner put its details first and the `last-message:` path last, so
+  long reviews arrived cut off with no way to find the rest. A teammate's
+  answer now puts Codex's final message first and the session, status,
+  warnings, and artifact paths after it. When the whole would not fit, the
+  message is cut at a line break and the answer names `last-message.txt`,
+  which holds it in full. Answers to agents outside a team are unchanged.
+
 ## 0.7.1 - 2026-10-15
 
 - `driving-codex` now hands review-and-fix requests to the `codex-review-loop`

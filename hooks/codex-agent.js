@@ -217,3 +217,55 @@ export function answerText({ stdout, stderrLines, code, signal }) {
   if (errors) parts.push(`stderr:\n${errors.slice(-4000)}`);
   return parts.join("\n\n");
 }
+
+// A request whose text is only teammate envelopes comes from an agent team, and
+// Claude Code hands the answer to the lead in an idle notification that it
+// cuts at about 4,000 characters.
+export function isTeammateRequest(text) {
+  const s = String(text ?? "");
+  return unwrapTeammateMessages(s) !== s;
+}
+
+// Below Claude Code's cut, with room for a multi-byte margin.
+export const TEAMMATE_ANSWER_LIMIT = 3800;
+
+const FINAL_MARK = "\n--- final message ---\n";
+const ARTIFACTS_MARK = "\n--- artifacts ---\n";
+const DETAIL_MARKS = ["\n--- errors ---\n", "\n--- warnings ---\n", "\nstderr tail: "];
+
+// Cuts text to `limit` at a line break and says where the rest is.
+function cutToFit(text, limit, fullPath) {
+  if (text.length <= limit) return text;
+  const rest = fullPath ? `the full message is in ${fullPath}` : "ask the agent for the rest";
+  const note = (cut) => `\n\n[cdx cut this answer at ${cut} of ${text.length} characters to fit the teammate result limit; ${rest}]`;
+  const budget = Math.max(0, limit - note(text.length).length);
+  let cut = text.lastIndexOf("\n", budget);
+  if (cut < budget * 0.75) cut = budget;
+  // Never split a surrogate pair.
+  if (cut > 0 && /[\uD800-\uDBFF]/.test(text[cut - 1])) cut -= 1;
+  return text.slice(0, cut).trimEnd() + note(cut);
+}
+
+// A teammate's answer, laid out to survive the cut: Codex's final message
+// first, then the runner's session, status, errors, warnings, and artifact
+// paths. When the whole would not fit, the message is cut at a line break and
+// the answer names last-message.txt, which holds it in full. Text that is not
+// a runner summary (a failure, a header error) is only cut to fit.
+export function teammateAnswer(text, limit = TEAMMATE_ANSWER_LIMIT) {
+  const s = String(text ?? "");
+  const start = s.indexOf(FINAL_MARK);
+  const artifacts = s.lastIndexOf(ARTIFACTS_MARK);
+  if (!s.startsWith("session: ") || start < 0 || artifacts < start) return cutToFit(s, limit, null);
+  let end = artifacts;
+  for (const mark of DETAIL_MARKS) {
+    const i = s.lastIndexOf(mark, artifacts);
+    if (i >= start + FINAL_MARK.length && i < end) end = i;
+  }
+  const message = s.slice(start + FINAL_MARK.length, end).trim();
+  const fullPath = /^last-message: (.+)$/m.exec(s.slice(artifacts))?.[1] ?? null;
+  const footer = ["---", s.slice(0, start).trim(), s.slice(end, artifacts).trim(), s.slice(artifacts).trim()]
+    .filter(Boolean)
+    .join("\n");
+  const shaped = cutToFit(message, Math.max(1000, limit - footer.length - 2), fullPath) + "\n\n" + footer;
+  return cutToFit(shaped, limit, fullPath);
+}

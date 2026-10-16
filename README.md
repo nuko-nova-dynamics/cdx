@@ -107,6 +107,12 @@ subagent. The agent's final answer still arrives separately. Reply with
 `SendMessage`; the agent reads it after its current run. Each run delivers at
 most 20 messages.
 
+In an agent team, Claude Code cuts a teammate's final answer at about 4,000
+characters before the lead sees it. A Codex teammate's answer therefore puts
+Codex's final message first and the runner details after it. A message too
+long to fit is cut at a line break, and the answer names the
+`last-message.txt` file that holds it in full.
+
 Codex's commands run under its own sandbox, not Claude Code's permission
 prompts. Mods need Claude Code CLI 2.1.287 or later and do not load under
 `--safe-mode` or `disableAllHooks`; the runner and commands work without them.
