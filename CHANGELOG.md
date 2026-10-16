@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1 - 2026-10-15
+
+- `driving-codex` now hands review-and-fix requests to the `codex-review-loop`
+  skill when it is installed. That skill has Codex review read-only, has
+  Claude verify and fix the valid findings, and re-reviews in the same Codex
+  session. Plain reviews stay in `driving-codex`.
+
 ## 0.7.0 - 2026-10-15
 
 - cdx is now two skills that Claude loads on its own, with no slash commands.

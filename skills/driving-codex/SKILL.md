@@ -1,6 +1,6 @@
 ---
 name: driving-codex
-description: Use whenever the user wants Codex involved, in any wording: delegating coding or a code review, handing Codex a browser or desktop task, running parallel Codex workers, resuming, forking, or applying a Codex session, Codex Cloud tasks, or a Codex CLI that is missing, signed out, or failing. Sets the model, effort, sandbox, prompt, and flags.
+description: Use whenever the user wants Codex involved, in any wording: delegating coding or a code review, handing Codex a browser or desktop task, running parallel Codex workers, resuming, forking, or applying a Codex session, Codex Cloud tasks, or a Codex CLI that is missing, signed out, or failing. Sets the model, effort, sandbox, prompt, and flags. When Claude should also fix what a Codex review finds, use codex-review-loop if it is installed.
 ---
 
 # Driving Codex
@@ -343,6 +343,10 @@ worktrees and scratch directories do not isolate UI state.
   elapsed time, and retries. Link artifacts when needed; keep raw JSONL out of chat.
 
 ## Reviews
+
+When the user wants Claude to fix what the review finds and the
+`codex-review-loop` skill is installed, follow that skill instead; it owns
+the review-and-fix loop.
 
 Default to a `cdx:codex-sol` agent with the header
 `cdx: --sandbox ro --effort xhigh --schema review-findings` and the exact
