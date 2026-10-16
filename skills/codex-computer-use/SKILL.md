@@ -31,7 +31,8 @@ These are unofficial OpenAI internals and can change with an app update.
   for a sign-in, OS permission, or security prompt that needs the user.
 - Approvals follow the user's Codex `approval_policy`. With `"never"`, app
   access and the tools' permission checks are approved automatically, as in
-  Codex; otherwise Claude Code and the runtime ask as usual. An app blocked by
+  Codex; otherwise Claude Code and the runtime ask as usual. An app the user
+  accepts counts as Codex's "always allow" and is not asked about again. An app blocked by
   organization policy or for safety reasons stays blocked.
 - Read back the observable result (a display value, a saved setting) before
   reporting success. One agent at a time per app or browser profile.

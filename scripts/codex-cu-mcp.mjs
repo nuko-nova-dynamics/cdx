@@ -17,7 +17,7 @@ import path from "node:path";
 import readline from "node:readline";
 import { approvalPolicyFromToml } from "../hooks/computer-use.js";
 
-const VERSION = "0.6.4";
+const VERSION = "0.6.5";
 const SUPPORTED_PROTOCOLS = ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"];
 const INIT_ID = "cdx-cu-init";
 
@@ -163,6 +163,17 @@ export function isComputerUseApproval(msg) {
   return msg?.method === "elicitation/create" && msg.params?._meta?.connector_id === "computer-use";
 }
 
+// The user's answer to an app approval, sent on to the runtime. Claude Code
+// offers only accept or decline, so an accept is sent as Codex's "always
+// allow" (or "session" when the request does not offer "always"), and the
+// runtime does not ask about that app again.
+export function withPersistedAccept(response, offered) {
+  if (response?.result?.action !== "accept" || response.result._meta?.persist) return response;
+  const persist = !Array.isArray(offered) || offered.includes("always") ? "always" : offered.includes("session") ? "session" : null;
+  if (!persist) return response;
+  return { ...response, result: { ...response.result, _meta: { ...response.result._meta, persist } } };
+}
+
 // Codex sends turn metadata with every call, and the browser service requires
 // it (session_id, turn_id) and releases a turn's tabs on turn_ended with the
 // same ids. Claude Code sends neither, so the launcher owns them: one session
@@ -202,6 +213,7 @@ let clientInit = null; // the client's initialize params, replayed to the real s
 let child = null;
 let starting = null;
 const forwarded = new Map(); // client request id -> method, for requests the real server owes
+const pendingApprovals = new Map(); // app approval id sent to the client -> the persist options it offered
 const awaitingStart = new Set(); // ids of calls waiting for the runtime to start
 const cancelledDuringStart = new Set();
 
@@ -239,6 +251,7 @@ function startChild() {
       // Answer every call the runtime still owed, so Claude is never left waiting.
       for (const [id] of forwarded) toolError(id, `The computer-use runtime stopped (${signal ?? `exit ${code}`}). Call js again to restart it.`);
       forwarded.clear();
+      pendingApprovals.clear();
     });
     readline.createInterface({ input: proc.stdout }).on("line", (line) => {
       let msg;
@@ -263,6 +276,7 @@ function startChild() {
         proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { action: "accept", content: {}, _meta: { persist: "session" } } }) + "\n");
         return;
       }
+      if (isComputerUseApproval(msg) && msg.id !== undefined) pendingApprovals.set(msg.id, msg.params?._meta?.persist);
       if (msg.id !== undefined && msg.method === undefined) forwarded.delete(msg.id);
       send(msg);
     });
@@ -295,7 +309,12 @@ async function forwardCall(msg) {
 function handle(msg) {
   // Responses from the client answer the real server's requests (elicitations).
   if (msg.method === undefined) {
-    if (child) child.stdin.write(JSON.stringify(msg) + "\n");
+    let answer = msg;
+    if (pendingApprovals.has(msg.id)) {
+      answer = withPersistedAccept(msg, pendingApprovals.get(msg.id));
+      pendingApprovals.delete(msg.id);
+    }
+    if (child) child.stdin.write(JSON.stringify(answer) + "\n");
     return;
   }
   const isRequest = msg.id !== undefined;

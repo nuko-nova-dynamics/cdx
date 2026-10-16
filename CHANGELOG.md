@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.5 - 2026-10-15
+
+- Fix computer use asking for app access on every call. When you accepted an
+  app-access prompt in Claude Code, cdx passed the answer to the runtime
+  without a persist choice, so the runtime asked again on the next call. An
+  accept is now sent as Codex's "always allow" (`persist: "always"`, or
+  `"session"` when the prompt does not offer "always"), so the runtime stops
+  asking about that app, in Claude Code and in Codex. Declines pass through
+  unchanged.
+
 ## 0.6.4 - 2026-10-14
 
 - Codex agents can message Claude while they run. Each agent run gives Codex

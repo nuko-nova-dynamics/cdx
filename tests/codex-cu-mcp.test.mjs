@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { codexApprovalPolicy, findServerConfig, isComputerUseApproval, turnEndedArguments, withTurnMetadata } from "../scripts/codex-cu-mcp.mjs";
+import { codexApprovalPolicy, findServerConfig, isComputerUseApproval, turnEndedArguments, withPersistedAccept, withTurnMetadata } from "../scripts/codex-cu-mcp.mjs";
 import { approvalPolicyFromToml } from "../hooks/computer-use.js";
 
 const LAUNCHER = new URL("../scripts/codex-cu-mcp.mjs", import.meta.url).pathname;
@@ -74,6 +74,18 @@ test("only computer-use elicitations count as app approvals", () => {
   assert.equal(isComputerUseApproval(approval), true);
   assert.equal(isComputerUseApproval({ method: "elicitation/create", params: { _meta: { connector_id: "browser" } } }), false);
   assert.equal(isComputerUseApproval({ method: "tools/call" }), false);
+});
+
+test("a user's accept of an app approval is sent as always allow, or session when always is not offered", () => {
+  const accept = { jsonrpc: "2.0", id: 7, result: { action: "accept", content: {} } };
+  assert.deepEqual(withPersistedAccept(accept, ["session", "always"]).result, { action: "accept", content: {}, _meta: { persist: "always" } });
+  assert.deepEqual(withPersistedAccept(accept, undefined).result._meta, { persist: "always" });
+  assert.deepEqual(withPersistedAccept(accept, ["session"]).result._meta, { persist: "session" });
+  assert.equal(withPersistedAccept(accept, []), accept);
+  const chosen = { jsonrpc: "2.0", id: 7, result: { action: "accept", _meta: { persist: "session" } } };
+  assert.equal(withPersistedAccept(chosen, ["session", "always"]), chosen);
+  const decline = { jsonrpc: "2.0", id: 7, result: { action: "decline" } };
+  assert.equal(withPersistedAccept(decline, ["session", "always"]), decline);
 });
 
 test("calls carry the calling agent's turn metadata, and cdx_agent is removed", () => {

@@ -131,7 +131,9 @@ else changes. While in use, the runtime's processes take several hundred MB
 
 Approvals follow your Codex `approval_policy`. With `"never"`, app-access
 approvals and Claude Code's permission check for these tools are accepted
-automatically, as they are in Codex; otherwise both ask as usual. The cdx mod
+automatically, as they are in Codex; otherwise both ask as usual. Accepting an
+app-access prompt counts as Codex's "always allow", so the runtime does not ask
+about that app again, in Claude Code or in Codex. The cdx mod
 also tells the runtime when each turn ends, as Codex does, so it can release
 browser tabs.
 
