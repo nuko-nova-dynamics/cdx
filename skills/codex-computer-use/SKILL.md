@@ -1,6 +1,6 @@
 ---
 name: codex-computer-use
-description: Operate desktop apps and browsers with Codex Computer Use, either directly through cdx's computer-use tools or by delegating to Codex with its Computer Use, Chrome, or built-in browser plugins. Use when the user wants an app or browser UI operated, a signed-in browser or named profile used, a visual result verified, or a workflow handled that other tools cannot reach.
+description: Use when a task needs a desktop app or browser UI operated, a signed-in browser or named profile used, a visual result checked on screen, or a workflow done that no API or CLI reaches, and before the first cdx computer-use tool call. Covers driving Codex Computer Use directly or delegating the task to Codex.
 ---
 
 # Codex Computer Use and browsers
@@ -14,7 +14,7 @@ use directly with cdx's `computer-use` tools, or delegate the task to Codex.
   short UI tasks, checks, and steps inside a larger task Claude is running.
 - **Delegate to Codex** when the user names Codex, or for a long UI task whose
   screenshots and UI state would fill Claude's context. Follow
-  `cdx:driving-codex` for the runner and `cdx:prompting-codex` for the prompt.
+  `cdx:driving-codex` for the runner and the prompt.
 
 ## Drive it directly
 

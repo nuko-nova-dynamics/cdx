@@ -1,8 +1,3 @@
----
-name: codex-structured-output
-description: Request and validate machine-readable JSON from Codex runs using a bundled or ad-hoc schema. Use when a Codex result must be parsed for review, planning, verification, or task reporting.
----
-
 # Structured output from Codex
 
 The runner's `--schema <path>` passes a JSON Schema to
@@ -12,8 +7,9 @@ not prove completion or the truth of the contents.
 
 ## Bundled schemas
 
-Use the full path under `${CLAUDE_PLUGIN_ROOT}/schemas/`. Short names
-are resolved by `/cdx:task`, not by the runner itself.
+Pass the runner the full path under `${CLAUDE_PLUGIN_ROOT}/schemas/`. A
+`cdx:` agent header also accepts the short name, such as
+`--schema review-findings`; the runner itself does not.
 
 | Schema | Use for | Fields |
 |---|---|---|

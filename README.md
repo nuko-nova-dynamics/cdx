@@ -14,8 +14,8 @@ Claude announces the handoff, includes the requested plugin and target in
 Codex's prompt, and checks which tools Codex actually used.
 
 CLI surface verified against **codex-cli 0.153.4** on September 5, 2026.
-Requires Node >= 20 and a logged-in Codex CLI (`codex login`). Run
-`/cdx:setup` after changing CLI versions to check for drift.
+Requires Node >= 20 and a logged-in Codex CLI (`codex login`). After
+changing CLI versions, ask Claude to check the Codex setup for drift.
 
 ## Install
 
@@ -38,7 +38,7 @@ supported; use the marketplace matching your existing installation.
 ## Philosophy
 
 - **Natural language is the interface.** Ask to delegate work to Codex;
-  slash commands are optional aliases.
+  Claude loads the skill it needs.
 - **Claude chooses the flags.** Sandbox, model, effort, web search, images,
   schemas are selected per task while preserving your explicit choices.
 - **Structured output over prose relay.** Reviews and reports come back as
@@ -49,34 +49,33 @@ supported; use the marketplace matching your existing installation.
   exception is the mod's record of which Codex session each Codex agent
   owns, kept in Claude Code's mod store and dropped after 30 days unused.
 
-## Commands
-
-| Command | Purpose |
-|---|---|
-| `/cdx:task` | Delegate coding, desktop, or browser work with model, effort, sandbox, search, schema, and session controls. Name UI plugins and targets in the prompt. `--approve-for-me` opts into automatic review on fresh workspace-write runs. |
-| `/cdx:review` | Structured review by a `cdx:codex-sol` agent that Claude verifies finding by finding and can message again for a re-review, or `--native` for Codex's built-in reviewer (`--uncommitted\|--base <ref>\|--commit <sha>`) |
-| `/cdx:fleet` | 2–4 parallel Codex workers: decomposed subtasks, multi-angle opinions, A/B implementations |
-| `/cdx:session` | `list`, `resume <id\|--last>`, `fork <id>`, `apply <task_id>` |
-| `/cdx:cloud` | Codex Cloud: `exec`, `list`, `status`, `diff`, `apply` |
-| `/cdx:setup` | Doctor: install, auth, version drift, runner compatibility, live smoke. `--plugins` checks browser/Computer Use installation and the `computer-use` server; add `--smoke` for a non-mutating runtime probe. |
-
 ## Skills
 
-- **driving-codex**: the "Choose the model first" routing table (which
-  Codex model and effort for which task shape), invocation contract, flag
-  heuristics, session management, fleet fan-out, failure signatures.
-  References: `skills/driving-codex/references/model-routing.md` (dated
-  benchmark, cost, and community evidence) and
-  `skills/driving-codex/references/flag-map.md` (stamped with the verified CLI
-  version).
-- **codex-structured-output**: bundled schema library (`review-findings`,
-  `verdict`, `task-report`, `patch-plan`) + rules for ad-hoc schemas.
-- **codex-computer-use**: when Claude drives computer use itself and when it
-  delegates to Codex; explicit plugin handoffs, browser/profile selection, live
-  capability checks, app and page verification, and shared UI coordination.
-- **prompting-codex**: task framing, authorization, and proportional verification,
-  with GPT-6 Astra guidance. Original templates were adapted from
-  openai/codex-plugin-cc (Apache-2.0, see NOTICE).
+cdx has no slash commands. Claude loads its two skills on its own when a
+request matches, so you ask in plain language; you can also type
+`/cdx:driving-codex` or `/cdx:codex-computer-use` to load one by hand.
+
+- **driving-codex**: any request that involves Codex: delegating coding or a
+  review, parallel workers, resuming, forking, or applying sessions, Codex
+  Cloud, and a CLI that is missing or failing. It holds the "Choose the model
+  first" routing table, the invocation contract, flag choices, sessions, and
+  fleet fan-out. Its references, read when a task needs them:
+  - `prompting.md`, with `prompt-blocks.md`, `codex-prompt-recipes.md`, and
+    `codex-prompt-antipatterns.md`: task framing, authorization, and
+    proportional verification. Original templates were adapted from
+    openai/codex-plugin-cc (Apache-2.0, see NOTICE).
+  - `structured-output.md`: the bundled schemas (`review-findings`,
+    `verdict`, `task-report`, `patch-plan`) and rules for ad-hoc schemas.
+  - `review.md`: review targets (uncommitted, against a base, one commit),
+    the structured review agent, and Codex's native reviewer.
+  - `setup.md`: the health check for install, sign-in, version drift, runner
+    compatibility, a live smoke test, and Computer Use or browser plugins.
+  - `model-routing.md` (dated benchmark, cost, and community evidence) and
+    `flag-map.md` (stamped with the verified CLI version).
+- **codex-computer-use**: desktop app and browser work. When Claude drives
+  computer use itself and when it delegates to Codex; explicit plugin
+  handoffs, browser/profile selection, live capability checks, app and page
+  verification, and shared UI coordination.
 
 ## Codex as a subagent
 
@@ -166,9 +165,9 @@ session, with the required app permissions or browser connection. cdx does not
 install them. Plugin packaging and tool APIs can vary across Codex versions;
 the skill requires discovery from the running session's instructions.
 
-Use `/cdx:setup --plugins` to inspect installation, or
-`/cdx:setup --plugins --smoke` with the desired capability/target for a
-non-mutating live check. The live check consumes normal Codex usage.
+Ask Claude to check the Codex setup for Computer Use or browser plugins to
+inspect installation, and to add a live smoke test with the desired
+capability and target for a non-mutating live check. The live check consumes normal Codex usage.
 See the [delegation skill](skills/codex-computer-use/SKILL.md) for the prompt
 contract and [official setup](https://learn.chatgpt.com/docs/computer-use).
 

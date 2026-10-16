@@ -42,7 +42,7 @@ finding. Report no findings when none are supported. Do not edit files.
 ```
 
 Use the review-findings schema for results that will be parsed. For
-native review, follow the target/prompt rules in `/cdx:review`.
+native review, follow the target/prompt rules in [review.md](review.md).
 
 ## Research or recommendation
 

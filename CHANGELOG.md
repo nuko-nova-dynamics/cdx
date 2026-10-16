@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.7.0 - 2026-10-15
+
+- cdx is now two skills that Claude loads on its own, with no slash commands.
+  Each skill and command description stays in Claude's context every turn,
+  and ten overlapping entries made it harder to pick the right one.
+  - Removed the `/cdx:task`, `/cdx:review`, `/cdx:fleet`, `/cdx:session`,
+    `/cdx:cloud`, and `/cdx:setup` commands. Ask in plain language instead.
+    Their unique rules moved into `driving-codex`: fork-only runs, session
+    listing, fleet angles and reporting, and Codex Cloud `apply`. The review
+    and setup procedures became `references/review.md` and
+    `references/setup.md`.
+  - `prompting-codex` and `codex-structured-output` are no longer separate
+    skills. They only apply once Claude is already delegating to Codex, so
+    they became `driving-codex/references/prompting.md` (with its prompt
+    blocks, recipes, and anti-patterns) and
+    `references/structured-output.md`. The prompting guide's copy of the
+    model table was dropped; the table in `driving-codex` is the one source.
+  - Both remaining descriptions now say when to load the skill.
+    `driving-codex` lists every Codex case: delegating work, reviews,
+    parallel workers, sessions, Cloud, and a failing CLI.
+    `codex-computer-use` also loads before the first cdx computer-use tool
+    call.
+
 ## 0.6.5 - 2026-10-15
 
 - Fix computer use asking for app access on every call. When you accepted an

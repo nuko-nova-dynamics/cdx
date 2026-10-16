@@ -1,26 +1,18 @@
----
-description: Review code with structured findings or Codex's native reviewer
-argument-hint: "[--uncommitted|--base <ref>|--commit <sha>] [--native] [focus text]"
-allowed-tools: Agent, SendMessage, Bash, Read, Grep, Glob
----
-
-Use the cdx:driving-codex skill. Review request:
-
-$ARGUMENTS
+# Reviewing code with Codex
 
 Determine one target from the request and current repository state:
-- `--uncommitted`: staged, unstaged, and untracked changes. This is the
+- **Uncommitted**: staged, unstaged, and untracked changes. This is the
   default for a dirty working tree when no other target was requested.
-- `--base <ref>`: changes from the merge base of `<ref>` and HEAD to the
-  current working tree, including tracked staged and unstaged edits.
+- **Against a base** `<ref>`: changes from the merge base of `<ref>` and HEAD
+  to the current working tree, including tracked staged and unstaged edits.
   Resolve `git merge-base <ref> HEAD`, then use `git diff <merge-base-sha>`
   consistently for structured and native reviews. This target alone does
   not include untracked files.
-- `--commit <sha>`: changes introduced by that commit.
+- **One commit** `<sha>`: changes introduced by that commit.
 
-Reject conflicting target flags. If no target can be inferred from the
-request or current context, ask for it before launching a review. Preserve
-any supplied focus, and report the target used.
+When the request names more than one target, or none can be inferred from
+the request or current context, ask for it before launching a review.
+Preserve any supplied focus, and report the target used.
 
 Default structured path, through a Codex agent:
 1. Spawn the reviewer with the Agent tool: `subagent_type: "cdx:codex-sol"`
@@ -47,9 +39,10 @@ runner with Bash instead: `--sandbox ro --model gpt-6.1-sol --effort xhigh
 --schema "${CLAUDE_PLUGIN_ROOT}/schemas/review-findings.schema.json" -- <the
 same prompt>`, then follow step 2.
 
-`--native` path, with Bash (the agents run the runner, which does not wrap
-`codex review`):
-- Without focus text, run `codex review` with the selected target flag.
+Native path, when the user asks for Codex's own reviewer, with Bash (the
+agents run the runner, which does not wrap `codex review`):
+- Without focus text, run `codex review` with the target's flag:
+  `--uncommitted`, `--base <ref>`, or `--commit <sha>`.
 - With focus text, pass a single custom prompt containing both the exact
   target and focus, without any target flag. In CLI 0.153.4, target flags
   conflict with `[PROMPT]`; combining them fails before review starts.
@@ -57,4 +50,5 @@ same prompt>`, then follow step 2.
   independent verification pass. Preserve the user's native choice.
 
 For a focused review without an explicit native request, use the
-structured path. This command reports findings; it does not apply fixes.
+structured path. A review reports findings; fix them only when the user
+asked for fixes.

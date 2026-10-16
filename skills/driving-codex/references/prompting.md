@@ -1,40 +1,10 @@
----
-name: prompting-codex
-description: Compose task prompts for Codex delegation, including GPT-6 Astra, coding, Computer Use and browser workflows, with clear scope, tools, evidence, completion criteria, and output requirements. Use before non-trivial CLI delegation or when improving a failing Codex prompt.
----
-
 # Prompting Codex
 
 State the outcome, relevant context, and constraints that change how
 Codex should work. Use plain prose, bullets, or XML when they make the
 boundaries clearer; tags and a fixed collection of blocks are optional.
 
-## Model and budget handoff
-
-Choose model and effort separately using `cdx:driving-codex`. If no task shape
-fits, use `gpt-6.1-sol` at `xhigh`. Name the model, effort, and reason before
-launching. Sol runs at `xhigh` for implementation, review, planning,
-authenticated browsing, and debugging unless the user names another effort.
-
-Use `gpt-6-luna` at `xhigh` for bounded work: exact steps, checks, and
-implementation with a plan, file scope, acceptance criteria, and verified
-commands. Review its diff. Move to Sol when
-the task needs broader judgment. Do not route new work to Terra by default;
-explicit user choices still win.
-
-Reserve `gpt-6-astra` for a specific hard technical or scientific difficulty
-that Sol at an appropriate effort is unlikely to handle. Start at `high`,
-keep context tight, delegate only the hard portion, and never fan it out.
-Importance, many pages, authentication, or computer use alone do not qualify.
-Inspect failures before changing model or effort; missing inputs and broken
-tools need correction first.
-
-GPT-6.1 Sol's public API supports `low` through `max`, excluding `none` and
-`minimal`. Use CLI-specific `ultra` only when the live catalog supports it;
-Luna has no `ultra`. Effort and speed tier are separate choices. `--fast`
-selects paid Fast serving; GPT-6.1 Sol Ultrafast is coming soon as of
-2026-09-29. For current credit rates, billing differences, and source links,
-read the driving skill's economics section and model-routing reference.
+Choose the model and effort first, from the driving-codex skill's table.
 
 ## Compose the task
 
@@ -50,9 +20,8 @@ read the driving skill's economics section and model-routing reference.
   `--schema`, explain field intent without duplicating the schema.
 - Require evidence for uncertain claims and identify the checks that
   would establish completion. Set effort only after the task is clear;
-  use a supported level from the driving skill's flag map.
-- Match the brief to the model chosen by the driving skill's routing
-  table. A Luna worker needs the plan, acceptance criteria, file scope,
+  use a supported level from [the flag map](flag-map.md).
+- Match the brief to the chosen model. A Luna worker needs the plan, acceptance criteria, file scope,
   and verification command spelled out; use that brief to make the result verifiable. Sol and Astra can take a
   thinner brief and resolve routine gaps themselves, so give them the
   goal and constraints rather than a step list.
@@ -111,9 +80,9 @@ they do not assume every model supports Astra's settings.
 Resume or fork follow-ups should usually contain the delta instruction.
 Restate scope only when it changed or the saved context could be ambiguous.
 
-Read [prompt blocks](references/prompt-blocks.md) for reusable constraints,
-[recipes](references/codex-prompt-recipes.md) for task examples, and
-[anti-patterns](references/codex-prompt-antipatterns.md) when a prompt is
+Read [prompt blocks](prompt-blocks.md) for reusable constraints,
+[recipes](codex-prompt-recipes.md) for task examples, and
+[anti-patterns](codex-prompt-antipatterns.md) when a prompt is
 underperforming. Use the smallest example that fits.
 
 Originally adapted from openai/codex-plugin-cc's gpt-5-4-prompting skill
