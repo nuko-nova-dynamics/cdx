@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.3 - 2026-10-27
+
+- `codex-computer-use` now says how to recover when computer use keeps
+  answering "This application session has been explicitly stopped by the
+  user for this turn" although the user stopped nothing. The state sits in
+  the long-running `SkyComputerUseService`, so new turns and new launchers
+  do not clear it; restarting the service and calling `js_reset` does.
+
 ## 0.7.2 - 2026-10-16
 
 - Codex teammates no longer lose the end of long answers. Claude Code cuts a

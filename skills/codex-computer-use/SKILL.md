@@ -37,6 +37,20 @@ These are unofficial OpenAI internals and can change with an app update.
 - Read back the observable result (a display value, a saved setting) before
   reporting success. One agent at a time per app or browser profile.
 - `turn_ended` is called automatically at the end of each turn; never call it.
+- "This application session has been explicitly stopped by the user for this
+  turn" is genuine only when the user stopped computer use during this turn;
+  then end the turn as it says. If the user did not stop it, or it returns on
+  a later turn, the long-running `SkyComputerUseService` is holding stale
+  state that new turns and new launchers do not clear. Restart the service
+  and the runtime, then start over with one entry call:
+
+  ```bash
+  pkill -x SkyComputerUseService
+  open -g "$HOME/.codex/computer-use/Codex Computer Use.app"
+  ```
+
+  Then call `js_reset`. The service is shared with the ChatGPT app's Codex
+  sessions, so restart it only when none of them is using computer use.
 
 ## Delegate to Codex
 
