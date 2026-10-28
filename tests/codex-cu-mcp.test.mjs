@@ -55,6 +55,12 @@ test("the newest installed plugin version supplies the command, args, and env", 
   assert.equal(config.env.BROWSER_USE_CODEX_APP_VERSION, "26.1007.30912");
 });
 
+test("the browser access preload is left out of the args", { skip: !darwin }, () => {
+  const home = codexHome({});
+  installPlugin(home, "26.1023.50603", process.execPath, ["--import", "file:///x/require-browser-access.mjs", "/x/cua-repl.mjs"]);
+  assert.deepEqual(findServerConfig(home).args, ["/x/cua-repl.mjs"]);
+});
+
 test("a missing plugin or runtime is an error to report, not a crash", { skip: !darwin }, () => {
   assert.match(findServerConfig(codexHome({})).error, /not installed/);
   assert.match(findServerConfig(codexHome({ "1.0.0": "/nonexistent/node" })).error, /runtime is missing/);

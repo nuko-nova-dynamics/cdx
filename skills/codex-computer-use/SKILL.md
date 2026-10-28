@@ -51,6 +51,10 @@ These are unofficial OpenAI internals and can change with an app update.
 
   Then call `js_reset`. The service is shared with the ChatGPT app's Codex
   sessions, so restart it only when none of them is using computer use.
+  Restart it for this message only, never for another error.
+- "The browser access host is unavailable" means the session runs cdx older
+  than 0.7.4. Restarting the service does not fix it; update cdx and restart
+  Claude Code.
 
 ## Delegate to Codex
 

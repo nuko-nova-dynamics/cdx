@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.4 - 2026-10-28
+
+- Browser control through the Chrome and Brave extensions works again. The
+  ChatGPT app's computer-use plugin 26.1023 preloads
+  `require-browser-access.mjs`, which makes the browser service ask for an
+  access pipe that the app passes only to its own Codex sessions, so every
+  browser call from cdx failed with "The browser access host is
+  unavailable". The launcher now leaves that preload out, and the browsers
+  list as they did before 26.1023.
+- `codex-computer-use` restricts the `SkyComputerUseService` restart to the
+  "explicitly stopped by the user" message.
+
 ## 0.7.3 - 2026-10-27
 
 - `codex-computer-use` now says how to recover when computer use keeps

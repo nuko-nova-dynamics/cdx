@@ -146,7 +146,17 @@ export function findServerConfig(home = codexHome()) {
   }
   if (!server?.command) return { error: `${file} has no cua_repl server.` };
   if (!existsSync(server.command)) return { error: `The computer-use runtime is missing: ${server.command}` };
-  return { version, file, command: server.command, args: server.args ?? [], env: server.env ?? {} };
+  return { version, file, command: server.command, args: withoutBrowserAccessGate(server.args ?? []), env: server.env ?? {} };
+}
+
+// Since 26.1023 the config preloads require-browser-access.mjs, which sets
+// BROWSER_USE_ACCESS_EXECUTOR_ID and so makes the browser service demand the
+// access pipe and identity that the ChatGPT app passes only to its own Codex
+// sessions. Without them every browser call fails with "The browser access
+// host is unavailable"; without the preload the browsers list as before.
+function withoutBrowserAccessGate(args) {
+  const gate = (arg) => String(arg).includes("require-browser-access");
+  return args.filter((arg, i) => !gate(arg) && !(arg === "--import" && gate(args[i + 1])));
 }
 
 // Codex skips approval prompts when its top-level approval_policy is "never";
