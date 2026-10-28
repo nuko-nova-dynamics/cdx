@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.5 - 2026-10-28
+
+- The computer-use server reports the plugin's version instead of a fixed
+  0.7.0.
+- The README and the setup check explain the browser access preload and the
+  "browser access host is unavailable" error.
+
 ## 0.7.4 - 2026-10-28
 
 - Browser control through the Chrome and Brave extensions works again. The

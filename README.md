@@ -142,6 +142,12 @@ about that app again, in Claude Code or in Codex. The cdx mod
 also tells the runtime when each turn ends, as Codex does, so it can release
 browser tabs.
 
+Browsers are reached through the ChatGPT Chrome and Brave extensions. Since
+the 26.1023 app, the runtime's config preloads `require-browser-access.mjs`,
+which asks for an access pipe that the app gives only to its own Codex
+sessions; the launcher leaves that preload out, or every browser call would
+fail with "The browser access host is unavailable".
+
 This uses unofficial OpenAI internals, not a published API. An update to the
 ChatGPT app can change or break it. Set `CDX_CU_TRACE=<file>` to log the MCP
 messages when troubleshooting.

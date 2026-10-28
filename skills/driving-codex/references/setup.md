@@ -39,7 +39,9 @@ asks for them or the failure points there.
    Also check cdx's own `computer-use` server: confirm
    `mcp__plugin_cdx_computer-use__js` is available, and with a live smoke test call it
    once with `await cua.getState();`. Report a tool error (no ChatGPT app or
-   no unified-computer-use plugin) as the missing prerequisite.
+   no unified-computer-use plugin) as the missing prerequisite. Report any
+   entry in the result's `errors`; "The browser access host is unavailable"
+   means the session runs cdx older than 0.7.4.
 
 Report CLI version, authentication, runner compatibility, and whether a
 live smoke test passed, failed, or was not run. Keep the report compact.
