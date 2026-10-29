@@ -25,6 +25,10 @@ test("each agent type's model routes back to its Codex model; other models do no
   assert.equal(codexModelOf("cdx-codex-"), null);
 });
 
+test("each agent type's description sends T3 Code threads to delegate_task", () => {
+  for (const agent of AGENTS) assert.match(agentSpec(agent).description, /mcp__t3-code__delegate_task/);
+});
+
 test("a plain prompt runs read-only at the agent type's default effort with progress", () => {
   const request = parseRequest("Fix the failing test");
   const { argv } = runnerArgs({ ...base, request });

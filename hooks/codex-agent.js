@@ -42,10 +42,16 @@ const AGENT_PROMPT =
   "This agent type is answered by the cdx mod, which runs the Codex CLI through " +
   "scripts/codex-run.mjs. Claude does not run this agent's loop.";
 
+// Claude reads the description when it picks an agent type, whichever skill
+// or note sent it here, so the T3 Code rule lives in it too.
+export const T3_NOTE =
+  " In a T3 Code thread (the `mcp__t3-code__delegate_task` tool is listed), do not use this " +
+  "type: hand Codex the task with `delegate_task` and T3's Codex provider instead.";
+
 export function agentSpec(agent) {
   return {
     name: agent.name,
-    description: agent.description,
+    description: agent.description + T3_NOTE,
     prompt: AGENT_PROMPT,
     model: MODEL_PREFIX + agent.model,
   };

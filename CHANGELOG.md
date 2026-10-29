@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.6 - 2026-10-29
+
+- In a T3 Code thread, Claude hands Codex its work with T3's `delegate_task`
+  instead of a `cdx:codex-*` agent or the runner, so the task runs as a T3
+  child thread. `driving-codex` has a new "In T3 Code" section covering how
+  to detect a T3 thread, choose the provider and model, keep a review
+  read-only, ask for structured output, and send follow-ups. Each
+  `cdx:codex-*` agent description carries the same rule, because Claude
+  reads it whichever skill or note sent it to the agent.
+
 ## 0.7.5 - 2026-10-28
 
 - The computer-use server reports the plugin's version instead of a fixed

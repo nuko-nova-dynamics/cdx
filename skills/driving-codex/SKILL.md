@@ -154,6 +154,31 @@ Use `--help` for the runner's current options. Native reviews and cloud
 management have separate commands below. For long tasks, use Bash
 `run_in_background: true` and collect the result when the process exits.
 
+## In T3 Code
+
+A session is a T3 Code thread when the `mcp__t3-code__delegate_task` tool
+is listed. The `mcp__t3-<machine>__*` tools are remote connectors to T3 and
+do not count. In a T3 Code thread, hand Codex its task with `delegate_task`
+instead of a `cdx:codex-*` agent or the runner, so it runs as a child thread
+that T3 shows and tracks. Keep the runner for what `delegate_task` cannot
+do: `--fork`, `--local`, cloud tasks, the native `codex review` when the
+user asks for it, and computer use.
+
+- Call `orchestrator_capabilities` and pick the provider with
+  `driverKind: "codex"` and `canRunChildTask: true`. Choose the model from
+  its list using the model table above, and set effort with the
+  `reasoningEffort` option. Use `serviceTier: "priority"` only when the user
+  says "fast".
+- T3 has no Codex sandbox flag, and its narrower `runtimeMode` values pause
+  for approval rather than block writes. For a read-only task, say in the
+  prompt that Codex must not edit files. For edits, use
+  `isolation: "worktree"` when the work needs its own checkout or PR.
+- T3 has no schema flag. When you need structured output, end the prompt
+  with the JSON shape to reply in.
+- Pass the returned `taskId` to `t3_background_wait`, and read the result
+  with `task_status` when its completion wakes you. Follow-ups go to the
+  child thread with `t3_thread_send`, which keeps the Codex session.
+
 ## Codex as a subagent
 
 The cdx mod registers three Agent tool types: `cdx:codex-sol`
@@ -348,7 +373,8 @@ When the user wants Claude to fix what the review finds and the
 `codex-review-loop` skill is installed, follow that skill instead; it owns
 the review-and-fix loop.
 
-Default to a `cdx:codex-sol` agent with the header
+In a T3 Code thread, launch the reviewer with `delegate_task` as described
+in "In T3 Code". Elsewhere, default to a `cdx:codex-sol` agent with the header
 `cdx: --sandbox ro --effort xhigh --schema review-findings` and the exact
 diff target and focus in its prompt. Re-review after fixes by sending the
 same agent a message, which keeps its context. Use `codex review` only when
