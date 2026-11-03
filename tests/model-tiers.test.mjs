@@ -90,6 +90,7 @@ test("model_catalog_json is read from config.toml's top level, with Windows path
     "C:\\Users\\PC\\.codex\\proxy-model-catalog.json");
   assert.equal(catalogPathFromToml('model_catalog_json = "C:\\Users\\PC\\catalog.json"\n'), "C:\\Users\\PC\\catalog.json");
   assert.equal(catalogPathFromToml('developer_instructions = """\nmodel_catalog_json = "example.json"\n[x]\n"""\nmodel = "m"\n'), null);
+  assert.equal(catalogPathFromToml('# old: developer_instructions = """\nmodel_catalog_json = "real.json"\n'), "real.json");
   assert.equal(catalogPathFromToml('[profiles.p]\nmodel_catalog_json = "p.json"\n'), null);
   assert.equal(catalogPathFromToml(null), null);
 });
@@ -166,6 +167,21 @@ test("a trusted project's .codex/config.toml catalog wins over the home one; an 
   const r = loadCodexCatalog({ bin: FAKE, env, cwd });
   assert.equal(r.source, path.join(repo, ".codex", "project.json"));
   assert.equal(resolveModel("astra", { env: {}, load: () => r }).model, "project/gpt-6-astra");
+});
+
+test("a linked worktree of a trusted repository uses its project catalog", (t) => {
+  const { home, env } = mixedCatalogHome(t);
+  const main = scratch(t);
+  const wt = scratch(t);
+  mkdirSync(path.join(main, ".git", "worktrees", "wt"), { recursive: true });
+  writeFileSync(path.join(main, ".git", "worktrees", "wt", "commondir"), "../..\n");
+  writeFileSync(path.join(wt, ".git"), `gitdir: ${path.join(main, ".git", "worktrees", "wt")}\n`);
+  mkdirSync(path.join(wt, ".codex"));
+  writeFileSync(path.join(wt, ".codex", "config.toml"), 'model_catalog_json = "project.json"\n');
+  writeFileSync(path.join(wt, ".codex", "project.json"), JSON.stringify({ models: [{ slug: "project/gpt-6-luna" }] }));
+  writeFileSync(path.join(home, "config.toml"),
+    `model_catalog_json = "proxy-model-catalog.json"\n[projects.${JSON.stringify(main)}]\ntrust_level = "trusted"\n`);
+  assert.equal(loadCodexCatalog({ bin: FAKE, env, cwd: wt }).source, path.join(wt, ".codex", "project.json"));
 });
 
 test("CDX_MODEL_<TIER> still wins over a configured catalog", (t) => {

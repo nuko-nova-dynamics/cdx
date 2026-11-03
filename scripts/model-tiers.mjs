@@ -83,6 +83,7 @@ function tomlLines(text) {
       if (line.includes(open)) open = null;
       continue;
     }
+    if (/^\s*#/.test(line)) continue;
     const header = /^\s*\[\[?\s*(.*?)\s*\]\]?\s*(#.*)?$/.exec(line);
     if (header) {
       table = header[1];
@@ -170,6 +171,16 @@ function samePath(a, b) {
   return norm(a) === norm(b);
 }
 
+// The main repository of a linked worktree whose root is `dir`, or null.
+// Codex grants a worktree the trust of its main repository.
+function mainRepoOfWorktree(dir) {
+  const pointer = /^gitdir:\s*(.+?)\s*$/m.exec(readText(path.join(dir, ".git")) ?? "");
+  if (!pointer) return null;
+  const gitDir = path.resolve(dir, pointer[1]);
+  const common = (readText(path.join(gitDir, "commondir")) ?? "").trim();
+  return common ? path.dirname(path.resolve(gitDir, common)) : null;
+}
+
 // The directories whose .codex/config.toml Codex layers over the home config,
 // closest first: from the working directory up to the project root (the
 // nearest directory holding .git), or the working directory alone outside a
@@ -202,7 +213,9 @@ function configuredCatalog(overrides, env, cwd) {
     const homeText = readText(path.join(home, "config.toml"));
     const trusted = [...trustedProjectsFromToml(homeText)];
     const dirs = projectDirs(cwd);
-    if (dirs.some((d) => trusted.some((t) => samePath(d, t)))) {
+    const mainRepo = mainRepoOfWorktree(dirs[dirs.length - 1]);
+    const trustable = mainRepo ? [...dirs, mainRepo] : dirs;
+    if (trustable.some((d) => trusted.some((t) => samePath(d, t)))) {
       for (const dir of dirs) {
         const codexDir = path.join(dir, ".codex");
         if (samePath(codexDir, home)) continue;
