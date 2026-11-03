@@ -2,13 +2,14 @@
 // machine's Codex catalog actually lists, so cdx never sends a guessed name.
 //
 // Order: CDX_MODEL_<TIER> from the environment, then the catalog Codex itself
-// uses. `codex debug models` prints that catalog with the effective config
-// applied, so a `model_catalog_json` (which replaces the catalog) or a proxy's
-// prefixed names show up as Codex will accept them. When that command fails
-// (an older CLI), the catalog is read from disk: `model_catalog_json` from
-// config.toml if set, else `models_cache.json`, both under CODEX_HOME.
+// uses. When config.toml (or a -c override) sets `model_catalog_json`, that
+// file is the catalog and nothing else is consulted: a custom provider accepts
+// only the names it lists, and some Codex versions print built-in models
+// beside it. Otherwise `codex debug models` prints the catalog with the
+// effective config applied; when that command fails (an older CLI),
+// `models_cache.json` under CODEX_HOME is read instead.
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -71,15 +72,64 @@ export function pickTierModel(models, tier) {
   return candidates[0] ?? null;
 }
 
+// Each line of TOML text that can hold a key, with the [table] it sits under
+// (null at the top level). Lines inside a multi-line string are skipped.
+function tomlLines(text) {
+  const out = [];
+  let table = null;
+  let open = null;
+  for (const line of String(text ?? "").split(/\r?\n/)) {
+    if (open) {
+      if (line.includes(open)) open = null;
+      continue;
+    }
+    if (/^\s*#/.test(line)) continue;
+    const header = /^\s*\[\[?\s*(.*?)\s*\]\]?\s*(#.*)?$/.exec(line);
+    if (header) {
+      table = header[1];
+      continue;
+    }
+    out.push({ table, line });
+    const multi = /=\s*("""|''')(.*)$/.exec(line);
+    if (multi && !multi[2].includes(multi[1])) open = multi[1];
+  }
+  return out;
+}
+
+// A string value written as "basic" or 'literal'.
+const STRING_VALUE = String.raw`(?:"((?:[^"\\]|\\.)*)"|'([^']*)')`;
+
 // A top-level `model_catalog_json` from config.toml text (keys under a
 // [table] belong to that table, and Codex ignores profile-level ones).
 export function catalogPathFromToml(text) {
-  for (const line of String(text ?? "").split(/\r?\n/)) {
-    if (/^\s*\[/.test(line)) break;
-    const m = /^\s*model_catalog_json\s*=\s*(?:"((?:[^"\\]|\\.)*)"|'([^']*)')/.exec(line);
-    if (m) return m[2] ?? JSON.parse(`"${m[1]}"`);
+  const key = new RegExp(String.raw`^\s*model_catalog_json\s*=\s*` + STRING_VALUE);
+  for (const { table, line } of tomlLines(text)) {
+    if (table !== null) continue;
+    const m = key.exec(line);
+    if (m) return m[2] ?? unquoteBasic(m[1]);
   }
   return null;
+}
+
+// The project directories config.toml marks `trust_level = "trusted"`.
+export function trustedProjectsFromToml(text) {
+  const header = new RegExp(String.raw`^projects\.` + STRING_VALUE + "$");
+  const trusted = new Set();
+  for (const { table, line } of tomlLines(text)) {
+    const t = table && header.exec(table);
+    if (t && /^\s*trust_level\s*=\s*["']trusted["']/.test(line)) trusted.add(t[2] ?? unquoteBasic(t[1]));
+  }
+  return trusted;
+}
+
+// A TOML basic string's contents with escapes applied, or the raw contents
+// when an escape is invalid (a Windows path written with single backslashes).
+function unquoteBasic(inner) {
+  try {
+    return JSON.parse(`"${inner}"`);
+  } catch {
+    return inner;
+  }
 }
 
 // A `-c model_catalog_json=<value>` override, as passed to the runner.
@@ -88,7 +138,7 @@ function catalogPathFromOverrides(overrides) {
     const m = /^\s*model_catalog_json\s*=\s*(.+)$/.exec(o);
     if (!m) continue;
     const v = m[1].trim();
-    return /^(".*"|'.*')$/.test(v) ? (v[0] === '"' ? JSON.parse(v) : v.slice(1, -1)) : v;
+    return /^(".*"|'.*')$/.test(v) ? (v[0] === '"' ? unquoteBasic(v.slice(1, -1)) : v.slice(1, -1)) : v;
   }
   return null;
 }
@@ -102,10 +152,107 @@ function expandPath(p, home) {
   return path.isAbsolute(p) ? p : path.resolve(home, p);
 }
 
+function readText(file) {
+  try {
+    return readFileSync(file, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function samePath(a, b) {
+  const norm = (p) => {
+    let r = path.resolve(p);
+    try {
+      r = realpathSync(r);
+    } catch {}
+    return process.platform === "win32" ? r.toLowerCase() : r;
+  };
+  return norm(a) === norm(b);
+}
+
+// The main repository of a linked worktree whose root is `dir`, or null.
+// Codex grants a worktree the trust of its main repository.
+function mainRepoOfWorktree(dir) {
+  const pointer = /^gitdir:\s*(.+?)\s*$/m.exec(readText(path.join(dir, ".git")) ?? "");
+  if (!pointer) return null;
+  const gitDir = path.resolve(dir, pointer[1]);
+  const common = (readText(path.join(gitDir, "commondir")) ?? "").trim();
+  return common ? path.dirname(path.resolve(gitDir, common)) : null;
+}
+
+// The directories whose .codex/config.toml Codex layers over the home config,
+// closest first: from the working directory up to the project root (the
+// nearest directory holding .git), or the working directory alone outside a
+// repository.
+function projectDirs(cwd) {
+  const dirs = [];
+  let dir = path.resolve(cwd);
+  for (;;) {
+    dirs.push(dir);
+    if (existsSync(path.join(dir, ".git"))) return dirs;
+    const up = path.dirname(dir);
+    if (up === dir) return [path.resolve(cwd)];
+    dir = up;
+  }
+}
+
+// The model_catalog_json Codex would use: null when none is configured, else
+// { file, models } or { file, error }. As Codex layers it, a -c override wins,
+// then a trusted project's .codex/config.toml (closest to the working
+// directory first), then CODEX_HOME/config.toml. Codex resolves a relative
+// path against the working directory for -c (the runner's, since it starts
+// Codex without changing directory, even with --cd), and against the
+// directory holding the config.toml otherwise. An untrusted project's config
+// is ignored, as Codex ignores it.
+function configuredCatalog(overrides, env, cwd) {
+  const home = codexHome(env);
+  let named = catalogPathFromOverrides(overrides);
+  let base = cwd;
+  if (named == null) {
+    const homeText = readText(path.join(home, "config.toml"));
+    const trusted = [...trustedProjectsFromToml(homeText)];
+    const dirs = projectDirs(cwd);
+    const mainRepo = mainRepoOfWorktree(dirs[dirs.length - 1]);
+    const trustable = mainRepo ? [...dirs, mainRepo] : dirs;
+    if (trustable.some((d) => trusted.some((t) => samePath(d, t)))) {
+      for (const dir of dirs) {
+        const codexDir = path.join(dir, ".codex");
+        if (samePath(codexDir, home)) continue;
+        named = catalogPathFromToml(readText(path.join(codexDir, "config.toml")));
+        if (named) {
+          base = codexDir;
+          break;
+        }
+      }
+    }
+    if (!named) {
+      named = catalogPathFromToml(homeText);
+      base = home;
+    }
+  }
+  if (!named) return null;
+  const file = expandPath(named, base);
+  try {
+    return { file, models: parseCatalog(readFileSync(file, "utf8")) };
+  } catch (err) {
+    return { file, error: err.code ?? err.message };
+  }
+}
+
 // The catalog this machine's Codex uses: { models, source } or { error }.
-export function loadCodexCatalog({ bin = process.env.CDX_CODEX_BIN || "codex", overrides = [], env = process.env } = {}) {
+// A configured model_catalog_json is read from its file alone: Codex 0.165
+// lists its built-in models beside that catalog in `codex debug models`, and
+// the provider behind the catalog may refuse those built-in names.
+export function loadCodexCatalog({ bin = process.env.CDX_CODEX_BIN || "codex", overrides = [], env = process.env, cwd = process.cwd() } = {}) {
+  const configured = configuredCatalog(overrides, env, cwd);
+  if (configured?.error) {
+    return { error: `the model_catalog_json file ${configured.file} could not be read (${configured.error})` };
+  }
+  if (configured) return { models: configured.models, source: configured.file };
+
   const argv = ["debug", "models", ...overrides.flatMap((c) => ["-c", c])];
-  const r = spawnSync(bin, argv, { encoding: "utf8", env, timeout: 20_000, windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+  const r = spawnSync(bin, argv, { encoding: "utf8", env, cwd, timeout: 20_000, windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
   let cliProblem;
   if (r.error) cliProblem = r.error.message;
   else if (r.status !== 0) cliProblem = `exit ${r.status}: ${(r.stderr || "").trim().split("\n").pop()}`;
@@ -119,21 +266,11 @@ export function loadCodexCatalog({ bin = process.env.CDX_CODEX_BIN || "codex", o
     }
   }
 
-  const home = codexHome(env);
-  let configText = null;
+  const file = path.join(codexHome(env), "models_cache.json");
   try {
-    configText = readFileSync(path.join(home, "config.toml"), "utf8");
-  } catch {}
-  const named = catalogPathFromOverrides(overrides) ?? catalogPathFromToml(configText);
-  // A configured catalog is the only valid one: falling back to the cache
-  // would offer names the provider may refuse.
-  const file = named ? expandPath(named, home) : path.join(home, "models_cache.json");
-  try {
-    const models = parseCatalog(readFileSync(file, "utf8"));
-    return { models, source: file };
+    return { models: parseCatalog(readFileSync(file, "utf8")), source: file };
   } catch (err) {
-    const what = named ? `the model_catalog_json file ${file}` : file;
-    return { error: `\`${bin} debug models\` failed (${cliProblem}) and ${what} could not be read (${err.code ?? err.message})` };
+    return { error: `\`${bin} debug models\` failed (${cliProblem}) and ${file} could not be read (${err.code ?? err.message})` };
   }
 }
 

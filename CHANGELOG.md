@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.8.1 - 2026-11-03
+
+- When `config.toml` (or a `-c` override) sets `model_catalog_json`, tiers
+  resolve from that file alone. Codex 0.165.0 prints its built-in models
+  beside the configured catalog in `codex debug models`, so 0.8.0 could
+  resolve a tier to a built-in name the catalog's provider refuses: on a
+  proxy without Astra, `astra` resolved to the plain built-in model and the
+  run failed with "model not allowed for this API key". Now a tier the file
+  lacks is unavailable and its agent type is not registered.
+  `CDX_MODEL_<TIER>` still wins.
+- A relative `-c model_catalog_json=...` path resolves against the working
+  directory, as Codex resolves it; a relative path in `config.toml` still
+  resolves against `CODEX_HOME`. A quoted Windows path in `-c` no longer
+  throws.
+- A trusted project's `.codex/config.toml` catalog wins over the home one, as
+  in Codex, and an untrusted project's is ignored; a linked worktree takes
+  its main repository's trust. Session-start tier
+  resolution runs in the session's directory so it sees that file. A
+  `model_catalog_json =` line inside a multi-line string, such as example
+  text in `developer_instructions`, is no longer read as the setting, and a
+  comment no longer hides the settings after it.
+
 ## 0.8.0 - 2026-11-03
 
 - cdx no longer hardcodes Codex model IDs. It routes by tier (Sol, Luna,

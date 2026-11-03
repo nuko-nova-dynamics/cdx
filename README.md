@@ -193,13 +193,16 @@ Codex catalog lists for that tier, in this order:
 
 1. `CDX_MODEL_SOL`, `CDX_MODEL_LUNA`, `CDX_MODEL_ASTRA` (and so on) from the
    environment.
-2. `codex debug models`, which applies your effective config. A
-   `model_catalog_json` file replaces the catalog, so a proxy that only
-   accepts prefixed names such as `team/<model>` (an example) resolves to
-   those names.
-3. If that command fails on an older CLI: the `model_catalog_json` file named
-   in `config.toml`, else `models_cache.json`, both under `CODEX_HOME`
-   (default `~/.codex`; `%USERPROFILE%\.codex` on Windows).
+2. The `model_catalog_json` file, when `config.toml` sets one. That file is
+   the whole catalog, so a proxy that only accepts prefixed names such as
+   `team/<model>` (an example) resolves to those names, and a tier the file
+   lacks is unavailable. Some Codex versions (0.165.0) print their built-in
+   models beside that file in `codex debug models`, so cdx reads the file
+   itself.
+3. Otherwise `codex debug models`, which applies your effective config; if
+   that command fails on an older CLI, `models_cache.json`. Both files sit
+   under `CODEX_HOME` (default `~/.codex`; `%USERPROFILE%\.codex` on
+   Windows).
 
 A tier with no model stops the run before Codex starts, with an error naming
 the catalog and its models. An explicit model ID passes through unchanged. To

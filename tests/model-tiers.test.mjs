@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -12,8 +13,10 @@ import {
   resolveTiers,
   tierOfSlug,
 } from "../scripts/model-tiers.mjs";
+import { registrationPlan } from "../hooks/codex-agent.js";
 
 const FAKE = new URL("./fixtures/fake-codex", import.meta.url).pathname;
+const TIERS_CLI = new URL("../scripts/codex-tiers.mjs", import.meta.url).pathname;
 
 // Example catalogs. These slugs are test data, not routing defaults.
 const OPENAI = [
@@ -85,6 +88,9 @@ test("model_catalog_json is read from config.toml's top level, with Windows path
     "C:\\Users\\PC\\.codex\\proxy-model-catalog.json");
   assert.equal(catalogPathFromToml("model_catalog_json = 'C:\\Users\\PC\\.codex\\proxy-model-catalog.json'\r\n"),
     "C:\\Users\\PC\\.codex\\proxy-model-catalog.json");
+  assert.equal(catalogPathFromToml('model_catalog_json = "C:\\Users\\PC\\catalog.json"\n'), "C:\\Users\\PC\\catalog.json");
+  assert.equal(catalogPathFromToml('developer_instructions = """\nmodel_catalog_json = "example.json"\n[x]\n"""\nmodel = "m"\n'), null);
+  assert.equal(catalogPathFromToml('# old: developer_instructions = """\nmodel_catalog_json = "real.json"\n'), "real.json");
   assert.equal(catalogPathFromToml('[profiles.p]\nmodel_catalog_json = "p.json"\n'), null);
   assert.equal(catalogPathFromToml(null), null);
 });
@@ -103,6 +109,85 @@ test("the catalog comes from `codex debug models`, with -c overrides passed thro
   const r = loadCodexCatalog({ bin: FAKE, overrides: ['model="x"'], env });
   assert.equal(r.source, `${FAKE} debug models`);
   assert.deepEqual(r.models.map((m) => m.slug), PROXY.map((m) => m.slug));
+});
+
+// Codex 0.165 lists its built-in models beside a configured catalog.
+function mixedCatalogHome(t) {
+  const home = scratch(t);
+  writeFileSync(path.join(home, "config.toml"), 'model = "cousin-full-service/gpt-6.1-sol"\nmodel_catalog_json = "proxy-model-catalog.json"\n');
+  writeFileSync(path.join(home, "proxy-model-catalog.json"), JSON.stringify({ models: PROXY }));
+  const debugList = path.join(home, "debug-models.json");
+  writeFileSync(debugList, JSON.stringify({ models: [...OPENAI, ...PROXY] }));
+  const argsFile = path.join(home, "debug-args.txt");
+  const env = { ...process.env, CDX_CODEX_BIN: FAKE, CODEX_HOME: home, FAKE_CODEX_CATALOG: debugList, FAKE_CODEX_DEBUG_ARGS_FILE: argsFile };
+  for (const tier of ["SOL", "LUNA", "ASTRA"]) delete env[`CDX_MODEL_${tier}`];
+  return { home, env, argsFile };
+}
+
+test("a configured model_catalog_json is the whole catalog, even when `codex debug models` adds built-in names", (t) => {
+  const { home, env, argsFile } = mixedCatalogHome(t);
+  const r = spawnSync(process.execPath, [TIERS_CLI, "--json"], { encoding: "utf8", env });
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  const file = path.join(home, "proxy-model-catalog.json");
+  assert.deepEqual(out.catalog, { source: file });
+  assert.deepEqual(out.tiers.sol, { model: "cousin-full-service/gpt-6.1-sol", tier: "sol", source: file });
+  assert.deepEqual(out.tiers.luna, { model: "cousin-full-service/gpt-6-luna", tier: "luna", source: file });
+  assert.match(out.tiers.astra.error, /no astra model in this machine's Codex catalog/);
+  assert.equal(existsSync(argsFile), false, "codex debug models ran");
+  const plan = Object.fromEntries(registrationPlan(out).map((p) => [p.agent.tier, p]));
+  assert.equal(plan.sol.register, true);
+  assert.equal(plan.luna.register, true);
+  assert.equal(plan.astra.register, false);
+  assert.match(plan.astra.notice, /codex-astra is not registered/);
+});
+
+test("a -c catalog resolves relative to the working directory, and a quoted Windows path does not throw", (t) => {
+  const { home, env } = mixedCatalogHome(t);
+  const work = scratch(t);
+  writeFileSync(path.join(work, "here.json"), JSON.stringify({ models: [{ slug: "work/gpt-6-astra", priority: 1 }] }));
+  const r = loadCodexCatalog({ bin: FAKE, overrides: ['model_catalog_json="here.json"'], env, cwd: work });
+  assert.equal(r.source, path.join(work, "here.json"));
+  const win = loadCodexCatalog({ bin: FAKE, overrides: ['model_catalog_json="C:\\Users\\PC\\.codex\\missing.json"'], env, cwd: home });
+  assert.match(win.error, /model_catalog_json file .*missing\.json could not be read/);
+});
+
+test("a trusted project's .codex/config.toml catalog wins over the home one; an untrusted project's is ignored", (t) => {
+  const { home, env } = mixedCatalogHome(t);
+  const repo = scratch(t);
+  mkdirSync(path.join(repo, ".git"));
+  mkdirSync(path.join(repo, ".codex"));
+  mkdirSync(path.join(repo, "sub"));
+  writeFileSync(path.join(repo, ".codex", "config.toml"), 'model_catalog_json = "project.json"\n');
+  writeFileSync(path.join(repo, ".codex", "project.json"), JSON.stringify({ models: [{ slug: "project/gpt-6-astra", priority: 1 }] }));
+  const cwd = path.join(repo, "sub");
+  assert.equal(loadCodexCatalog({ bin: FAKE, env, cwd }).source, path.join(home, "proxy-model-catalog.json"));
+  writeFileSync(path.join(home, "config.toml"),
+    `model_catalog_json = "proxy-model-catalog.json"\n[projects.${JSON.stringify(repo)}]\ntrust_level = "trusted"\n`);
+  const r = loadCodexCatalog({ bin: FAKE, env, cwd });
+  assert.equal(r.source, path.join(repo, ".codex", "project.json"));
+  assert.equal(resolveModel("astra", { env: {}, load: () => r }).model, "project/gpt-6-astra");
+});
+
+test("a linked worktree of a trusted repository uses its project catalog", (t) => {
+  const { home, env } = mixedCatalogHome(t);
+  const main = scratch(t);
+  const wt = scratch(t);
+  mkdirSync(path.join(main, ".git", "worktrees", "wt"), { recursive: true });
+  writeFileSync(path.join(main, ".git", "worktrees", "wt", "commondir"), "../..\n");
+  writeFileSync(path.join(wt, ".git"), `gitdir: ${path.join(main, ".git", "worktrees", "wt")}\n`);
+  mkdirSync(path.join(wt, ".codex"));
+  writeFileSync(path.join(wt, ".codex", "config.toml"), 'model_catalog_json = "project.json"\n');
+  writeFileSync(path.join(wt, ".codex", "project.json"), JSON.stringify({ models: [{ slug: "project/gpt-6-luna" }] }));
+  writeFileSync(path.join(home, "config.toml"),
+    `model_catalog_json = "proxy-model-catalog.json"\n[projects.${JSON.stringify(main)}]\ntrust_level = "trusted"\n`);
+  assert.equal(loadCodexCatalog({ bin: FAKE, env, cwd: wt }).source, path.join(wt, ".codex", "project.json"));
+});
+
+test("CDX_MODEL_<TIER> still wins over a configured catalog", (t) => {
+  const { env } = mixedCatalogHome(t);
+  const r = spawnSync(process.execPath, [TIERS_CLI, "--json", "astra"], { encoding: "utf8", env: { ...env, CDX_MODEL_ASTRA: "cousin-full-service/gpt-6-astra" } });
+  assert.deepEqual(JSON.parse(r.stdout).tiers.astra, { model: "cousin-full-service/gpt-6-astra", tier: "astra", source: "CDX_MODEL_ASTRA" });
 });
 
 test("without `codex debug models`, a configured model_catalog_json is read relative to CODEX_HOME", (t) => {

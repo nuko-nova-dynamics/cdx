@@ -14,7 +14,7 @@ Recheck the installed command help when versions differ. The runner's
 | `-o, --output-last-message <file>` | Always set |
 | `--sandbox <read-only\|workspace-write\|danger-full-access>` | Required runner `--sandbox ro\|write\|full` |
 | `--approve-for-me` | Explicit opt-in to automatic approval review; runner requires fresh `--sandbox write` |
-| `--model <model>` | `--model <id\|tier>`; a tier word (`sol`, `luna`, `astra`, `terra`, `spark`) resolves through `CDX_MODEL_<TIER>`, then `codex debug models`; an ID passes unchanged |
+| `--model <model>` | `--model <id\|tier>`; a tier word (`sol`, `luna`, `astra`, `terra`, `spark`) resolves through `CDX_MODEL_<TIER>`, then the configured `model_catalog_json` or `codex debug models`; an ID passes unchanged |
 | `-c model_reasoning_effort="<level>"` | `--effort`; model support varies, see below |
 | `-c service_tier="fast"` | `--fast`; see availability and cost notes below |
 | `--ignore-user-config` + `-c apps._default.enabled=false` | `--lean`; fresh runs only, explicit model required, not with `--local`. Verified on codex-cli 0.154.0 (2026-09-11): auth, repository `AGENTS.md`, `$CODEX_HOME/AGENTS.md`, and `.rules` still load; MCP servers, connector apps, hooks, personality, and config overrides do not |
