@@ -2,8 +2,8 @@
 
 Adapt the smallest example that fits. Replace placeholders with source
 and authorization from the current request. These recipes work across
-Codex models, including GPT-6 Astra; model and effort selection belong
-in the runner settings.
+Codex tiers, including Astra; tier and effort selection belong in the
+runner settings.
 
 ## Diagnosis
 

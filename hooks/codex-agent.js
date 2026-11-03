@@ -2,36 +2,38 @@
 // request's `cdx:` header becomes runner flags, and how the runner's output
 // becomes the agent's answer. No `$` calls here, so `node --test` can load it.
 
-// A registered agent's model is this prefix plus the Codex model. Claude Code
-// accepts the id as given; the `turn.step` hook answers every request that
-// names it, so no request with this model reaches an API.
+// A registered agent's model is this prefix plus its Codex tier
+// (`cdx-codex-sol`). Claude Code accepts the id as given; the `turn.step` hook
+// answers every request that names it, so no request with this model reaches
+// an API. The tier, not a model ID, goes to the runner, which resolves it
+// against the machine's Codex catalog (scripts/model-tiers.mjs) on each run.
 export const MODEL_PREFIX = "cdx-codex-";
 
 export const AGENTS = [
   {
     name: "codex-sol",
-    model: "gpt-6.1-sol",
+    tier: "sol",
     effort: "xhigh",
     description:
-      "Codex CLI running GPT-6.1 Sol: ordinary implementation, reviews, planning, and debugging. " +
+      "Codex CLI running the Sol tier: ordinary implementation, reviews, planning, and debugging. " +
       "Read-only at xhigh effort unless the prompt's first line is a `cdx:` header such as " +
       "`cdx: --sandbox write`. SendMessage continues the same Codex session.",
   },
   {
     name: "codex-luna",
-    model: "gpt-6-luna",
+    tier: "luna",
     effort: "xhigh",
     description:
-      "Codex CLI running GPT-6 Luna: bounded checks, extraction, and well-briefed mechanical edits. " +
+      "Codex CLI running the Luna tier: bounded checks, extraction, and well-briefed mechanical edits. " +
       "Read-only at xhigh effort unless the prompt's first line is a `cdx:` header such as " +
       "`cdx: --sandbox write --lean`. SendMessage continues the same Codex session.",
   },
   {
     name: "codex-astra",
-    model: "gpt-6-astra",
+    tier: "astra",
     effort: "high",
     description:
-      "Codex CLI running GPT-6 Astra: only the hardest technical or scientific portion of a task, " +
+      "Codex CLI running the Astra tier: only the hardest technical or scientific portion of a task, " +
       "after naming why Sol is unlikely to handle it. Read-only at high effort unless the prompt's " +
       "first line is a `cdx:` header. SendMessage continues the same Codex session.",
   },
@@ -48,18 +50,44 @@ export const T3_NOTE =
   " In a T3 Code thread (the `mcp__t3-code__delegate_task` tool is listed), do not use this " +
   "type: hand Codex the task with `delegate_task` and T3's Codex provider instead.";
 
-export function agentSpec(agent) {
+// `resolved` is what the tier resolved to at session start ({ model, source }),
+// named in the description so Claude can report the model it delegated to.
+export function agentSpec(agent, resolved) {
+  const on = resolved?.model ? ` On this machine the tier resolves to \`${resolved.model}\`.` : "";
   return {
     name: agent.name,
-    description: agent.description + T3_NOTE,
+    description: agent.description + on + T3_NOTE,
     prompt: AGENT_PROMPT,
-    model: MODEL_PREFIX + agent.model,
+    model: MODEL_PREFIX + agent.tier,
   };
 }
 
-export function codexModelOf(stepModel) {
+// The tier a request's model names, or null for any other model.
+export function tierOfStepModel(stepModel) {
   const m = String(stepModel ?? "");
-  return m.startsWith(MODEL_PREFIX) && m.length > MODEL_PREFIX.length ? m.slice(MODEL_PREFIX.length) : null;
+  const rest = m.startsWith(MODEL_PREFIX) ? m.slice(MODEL_PREFIX.length) : "";
+  // Before 0.8.0 the id carried a model (`cdx-codex-gpt-6.1-sol`); an agent
+  // spawned then keeps routing by the tier its model ended with.
+  return AGENTS.find((a) => rest === a.tier || rest.endsWith(`-${a.tier}`))?.tier ?? null;
+}
+
+// What to do with each agent type, given the runner's tier resolution
+// (scripts/codex-tiers.mjs --json output, or null when it could not run).
+// A tier the catalog lacks is not registered and gets a notice; when the
+// catalog itself could not be read, every type is registered and the runner
+// reports the problem on its first run instead of a guessed name.
+export function registrationPlan(resolution) {
+  const unreadable = !resolution?.tiers || resolution.catalog?.error;
+  return AGENTS.map((agent) => {
+    const r = resolution?.tiers?.[agent.tier];
+    if (r?.model) return { agent, register: true, resolved: r };
+    if (unreadable) return { agent, register: true, resolved: null };
+    return {
+      agent,
+      register: false,
+      notice: `cdx: ${agent.name} is not registered: ${r?.error ?? `the ${agent.tier} tier did not resolve`}`,
+    };
+  });
 }
 
 // Per-agent records: the Codex session plus the sandbox and effort to resume with.
@@ -68,7 +96,7 @@ export const RECORD_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 const DEFAULT_SANDBOX = "ro";
 const DEFAULT_EFFORT = "medium";
-const defaultEffort = (model) => AGENTS.find((a) => a.model === model)?.effort ?? DEFAULT_EFFORT;
+const defaultEffort = (tier) => AGENTS.find((a) => a.tier === tier)?.effort ?? DEFAULT_EFFORT;
 const SCHEMA_NAMES = new Set(["review-findings", "verdict", "task-report", "patch-plan"]);
 const VALUE_FLAGS = new Set(["--sandbox", "--effort", "--schema", "--image", "--add-dir"]);
 const BOOLEAN_FLAGS = new Set(["--search", "--fast", "--lean", "--approve-for-me"]);
@@ -136,11 +164,11 @@ export function parseRequest(text) {
 // The runner argv for one turn. A record means the agent already has a Codex
 // session, so the turn resumes it with the sandbox and effort it last used
 // unless the header changes them. A new session starts at its agent type's
-// default effort.
-export function runnerArgs({ runner, schemasDir, model, record, request }) {
+// default effort. `--model` gets the tier; the runner resolves it.
+export function runnerArgs({ runner, schemasDir, tier, record, request }) {
   const sandbox = request.sandbox ?? record?.sandbox ?? DEFAULT_SANDBOX;
-  const effort = request.effort ?? record?.effort ?? defaultEffort(model);
-  const argv = ["node", runner, "--progress", "--claude-channel", "--sandbox", sandbox, "--model", model, "--effort", effort];
+  const effort = request.effort ?? record?.effort ?? defaultEffort(tier);
+  const argv = ["node", runner, "--progress", "--claude-channel", "--sandbox", sandbox, "--model", tier, "--effort", effort];
   if (record?.thread) argv.push("--resume", record.thread);
   for (let i = 0; i < request.flags.length; i += 1) {
     const flag = request.flags[i];

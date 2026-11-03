@@ -9,7 +9,9 @@ const RUNNER = new URL("../scripts/codex-run.mjs", import.meta.url).pathname;
 const FAKE = new URL("./fixtures/fake-codex", import.meta.url).pathname;
 
 // Host defaults must not leak into the tests; each test sets them explicitly.
-const { CDX_DEFAULT_MODEL: _m, CDX_DEFAULT_EFFORT: _e, ...BASE_ENV } = process.env;
+const BASE_ENV = Object.fromEntries(
+  Object.entries(process.env).filter(([k]) => !/^CDX_(DEFAULT_MODEL|DEFAULT_EFFORT|MODEL_\w+)$/.test(k)),
+);
 
 function run(args, extraEnv = {}) {
   return spawnSync("node", [RUNNER, ...args], {
@@ -367,4 +369,68 @@ test("the message_claude server ignores non-object input and refuses calls past 
   assert.equal(replies.length, 22);
   assert.ok(replies.slice(1, 21).every((m) => !m.result.isError));
   assert.equal(replies[21].result.isError, true);
+});
+
+// Tier names resolve through the machine's Codex catalog. The prefixed slugs
+// are test data for a proxy that refuses unprefixed names and has no Astra.
+function proxyCatalog(t) {
+  const dir = mkdtempSync(path.join(tmpdir(), "cdx-catalog-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, "catalog.json");
+  writeFileSync(file, JSON.stringify({ models: [
+    { slug: "cousin-full-service/gpt-6.1-sol", visibility: "list", priority: 1 },
+    { slug: "cousin-full-service/gpt-6-luna", visibility: "list", priority: 5 },
+  ] }));
+  return { FAKE_CODEX_CATALOG: file, CODEX_HOME: dir };
+}
+
+test("--model <tier> sends the model the catalog lists, prefix included, and reports it", (t) => {
+  const r = isolatedRun(t, ["--sandbox", "ro", "--model", "sol", "--", "hello"], proxyCatalog(t));
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.args[r.args.indexOf("-m") + 1], "cousin-full-service/gpt-6.1-sol");
+  assert.match(r.stdout, /^model: cousin-full-service\/gpt-6\.1-sol \(sol tier, from .* debug models\)$/m);
+  assert.match(r.stdout, /^session: /);
+});
+
+test("CDX_DEFAULT_MODEL may name a tier", (t) => {
+  const r = isolatedRun(t, ["--sandbox", "ro", "--", "hello"], { ...proxyCatalog(t), CDX_DEFAULT_MODEL: "luna" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.args[r.args.indexOf("-m") + 1], "cousin-full-service/gpt-6-luna");
+});
+
+test("a tier the catalog lacks stops the run before Codex starts, naming the override", (t) => {
+  const scratchDir = mkdtempSync(path.join(tmpdir(), "cdx-regression-"));
+  t.after(() => rmSync(scratchDir, { recursive: true, force: true }));
+  const argsFile = path.join(scratchDir, "argv.txt");
+  const r = run(["--sandbox", "ro", "--model", "astra", "--", "hello"], { ...proxyCatalog(t), FAKE_CODEX_ARGS_FILE: argsFile });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /no astra model in this machine's Codex catalog/);
+  assert.match(r.stderr, /CDX_MODEL_ASTRA/);
+  assert.throws(() => readFileSync(argsFile), /ENOENT/, "codex exec must not run");
+});
+
+test("CDX_MODEL_<TIER> overrides the catalog; an explicit model id is passed unchanged", (t) => {
+  const env = { ...proxyCatalog(t), CDX_MODEL_ASTRA: "cousin-full-service/astra-override" };
+  const r = isolatedRun(t, ["--sandbox", "ro", "--model", "astra", "--", "hello"], env);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.args[r.args.indexOf("-m") + 1], "cousin-full-service/astra-override");
+  assert.match(r.stdout, /\(astra tier, from CDX_MODEL_ASTRA\)/);
+  const direct = isolatedRun(t, ["--sandbox", "ro", "--model", "anything/as-given", "--", "hello"], { FAKE_CODEX_DEBUG: "fail" });
+  assert.equal(direct.status, 0, direct.stderr);
+  assert.equal(direct.args[direct.args.indexOf("-m") + 1], "anything/as-given");
+});
+
+test("the runner's -c overrides reach the catalog read", (t) => {
+  const env = proxyCatalog(t);
+  const debugArgs = path.join(env.CODEX_HOME, "debug-args.txt");
+  const r = isolatedRun(t, ["--sandbox", "ro", "--model", "luna", "-c", 'model_provider="proxy"', "--", "hello"],
+    { ...env, FAKE_CODEX_DEBUG_ARGS_FILE: debugArgs });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(readFileSync(debugArgs, "utf8").trim().split("\n"), ["debug", "models", "-c", 'model_provider="proxy"']);
+});
+
+test("a tier with --local is a usage error", () => {
+  const r = run(["--sandbox", "ro", "--local", "--model", "sol", "--", "hello"]);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /is a tier; with --local/);
 });

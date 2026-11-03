@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.8.0 - 2026-11-03
+
+- cdx no longer hardcodes Codex model IDs. It routes by tier (Sol, Luna,
+  Astra, plus `terra` and `spark`), and the runner's `--model <tier>`
+  resolves to the model the machine's Codex catalog lists for that tier:
+  `CDX_MODEL_<TIER>` first (such as `CDX_MODEL_SOL`), then
+  `codex debug models`, which applies the effective config, so a
+  `model_catalog_json` proxy catalog with prefixed names resolves to those
+  names. On a CLI without that command, the runner reads the configured
+  `model_catalog_json` file, else `models_cache.json`, under `CODEX_HOME`
+  (`%USERPROFILE%\.codex` on Windows). A tier with no model stops the run
+  before Codex starts, with an error naming the catalog and its models. An
+  explicit model ID still passes through unchanged.
+- The runner summary has a `model:` line naming the resolved model and where
+  it came from. `node scripts/codex-tiers.mjs` prints what each tier
+  resolves to.
+- The `cdx:codex-sol`, `cdx:codex-luna`, and `cdx:codex-astra` agent types
+  carry a tier instead of a model ID, and each description names the model
+  its tier resolved to at session start. A tier the catalog lacks is not
+  registered, and a transcript line says why. Agents spawned under 0.7.x
+  ids keep routing after an update.
+- The `spark` alias for one fixed model is gone; `--model spark` resolves
+  like any other tier.
+- `driving-codex` and its references talk in tiers. Dated benchmark, rate,
+  and context figures stay, labeled with the date and the model each tier
+  resolved to then.
+
 ## 0.7.6 - 2026-10-29
 
 - In a T3 Code thread, Claude hands Codex its work with T3's `delegate_task`

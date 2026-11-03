@@ -9,14 +9,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import readline from "node:readline";
+import { TIERS, loadCodexCatalog, resolveModel } from "./model-tiers.mjs";
 
 const SANDBOX_MAP = { ro: "read-only", write: "workspace-write", full: "danger-full-access" };
-const MODEL_ALIASES = { spark: "gpt-5.3-codex-spark" };
 // This is the CLI's vocabulary. The selected model decides which levels it supports.
 const EFFORTS = new Set(["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]);
 const LOCAL_PROVIDERS = new Set(["lmstudio", "ollama"]);
 
-const USAGE = "usage: codex-run.mjs --sandbox <ro|write|full> [--model <m|spark>] [--effort <e>] [--fast] [--search] [--lean] " +
+const USAGE = "usage: codex-run.mjs --sandbox <ro|write|full> [--model <id|tier>] [--effort <e>] [--fast] [--search] [--lean] " +
   "[--approve-for-me] [--image <f>]... [--schema <path>] [--resume <id|last> | --fork <id>] " +
   "[--local [lmstudio|ollama]] [--add-dir <d>]... [--cd <dir>] [-c k=v]... " +
   "[--ephemeral] [--scratch <dir>] [--progress] [--claude-channel] -- <prompt...>\n";
@@ -95,6 +95,7 @@ function parseArgs(argv) {
 const opts = parseArgs(process.argv.slice(2));
 if (opts.help) {
   process.stdout.write(USAGE + `effort: ${[...EFFORTS].join(" | ")} (model-dependent)\n` +
+    `tier: ${TIERS.join(" | ")} resolves through CDX_MODEL_<TIER>, then the Codex catalog (codex debug models)\n` +
     "Model and effort inherit Codex settings when omitted. Automatic review requires a fresh --sandbox write run.\n");
   process.exit(0);
 }
@@ -186,8 +187,21 @@ if (opts.fast) argv.push("-c", `service_tier="fast"`);
 // Model and effort precedence: explicit flag, then CDX_DEFAULT_MODEL /
 // CDX_DEFAULT_EFFORT from the host environment, then the user's Codex
 // config. Local runs keep the --oss model.
-const model = opts.model ?? (opts.local ? undefined : process.env.CDX_DEFAULT_MODEL || undefined);
-if (model) argv.push("-m", MODEL_ALIASES[model] ?? model);
+// A tier name (sol, luna, ...) resolves to the model this machine's Codex
+// catalog lists for it, or CDX_MODEL_<TIER>; it is never sent as a guess.
+const requestedModel = opts.model ?? (opts.local ? undefined : process.env.CDX_DEFAULT_MODEL || undefined);
+let resolvedModel = requestedModel ? { model: requestedModel } : null;
+if (requestedModel && opts.local && TIERS.includes(requestedModel.toLowerCase())) {
+  die(`--model ${requestedModel} is a tier; with --local, name the local model`);
+}
+if (requestedModel && !opts.local) {
+  resolvedModel = resolveModel(requestedModel, { load: () => loadCodexCatalog({ overrides: opts.overrides }) });
+  if (resolvedModel.error) {
+    process.stderr.write(`codex-run: ${resolvedModel.error}\n`);
+    process.exit(2);
+  }
+}
+if (resolvedModel) argv.push("-m", resolvedModel.model);
 const effort = opts.effort ?? (process.env.CDX_DEFAULT_EFFORT || undefined);
 if (effort && !EFFORTS.has(effort)) die(`CDX_DEFAULT_EFFORT must be one of: ${[...EFFORTS].join(", ")}`);
 if (effort) argv.push("-c", `model_reasoning_effort="${effort}"`);
@@ -317,6 +331,7 @@ child.on("close", async (code) => {
   const lines = [];
   lines.push(`session: ${state.threadId ?? "unknown"}`);
   lines.push(`status: ${ok ? (forkOnly ? "forked" : "completed") : `failed (exit ${code})`}`);
+  if (resolvedModel?.tier) lines.push(`model: ${resolvedModel.model} (${resolvedModel.tier} tier, from ${resolvedModel.source})`);
   const counts = Object.entries(state.itemCounts)
     .map(([k, v]) => `${k}=${v}`)
     .join(" ");

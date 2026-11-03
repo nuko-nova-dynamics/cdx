@@ -21,6 +21,9 @@ asks for them or the failure points there.
    problem. For a rejected model or effort, check installed capabilities
    and account availability. Preserve an explicit model choice and the
    user's configuration; do not silently remove a pin or retry with Spark.
+   For a tier that fails to resolve or a missing `cdx:codex-*` type, run
+   `node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-tiers.mjs"` and report what
+   each tier resolves to and from which catalog.
 5. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-run.mjs" --help` to verify
    the bundled runner loads without starting a model task.
 6. Live smoke test, without a plugin check:

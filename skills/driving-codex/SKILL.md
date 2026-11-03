@@ -24,8 +24,15 @@ Before writing a non-trivial prompt for Codex, read
 
 ## Choose the model first
 
-Choose the model and reasoning effort separately. If no task shape fits,
-fall back to `gpt-6.1-sol --effort xhigh`. Unless the user names another
+cdx routes by tier, not by model ID. The tiers are Sol (the default), Luna
+(bounded, low-cost work), and Astra (the hardest technical work). Pass the
+tier word as the model, as in `--model sol`, and the runner resolves it to
+the model this machine's Codex catalog lists for that tier (see "Model
+tiers on this machine"). Never type a model ID from memory: a proxy can
+require prefixed names, and a machine can lack a tier.
+
+Choose the tier and reasoning effort separately. If no task shape fits,
+fall back to `--model sol --effort xhigh`. Unless the user names another
 effort, Sol and Luna run at `xhigh` and Astra at `high`. Explicit user choices always win,
 and a model error is never permission to substitute.
 
@@ -36,17 +43,17 @@ more reasoning, especially on Luna at `xhigh` or `max` and on Astra. Model
 rates and repeated context still matter more than the effort label in most
 workflows.
 
-| Task shape | Model and effort | Why |
+| Task shape | Tier and effort | Why |
 |---|---|---|
-| Ordinary implementation, authenticated browsing, administrative work | `gpt-6.1-sol --effort xhigh` | Default for work that needs judgment across several steps |
-| Planning, decomposition, architecture, final merge decision | `gpt-6.1-sol --effort xhigh` | Reconcile constraints and give bounded workers a clear plan |
-| Subtle debugging, security, concurrency, unresolved cross-file reasoning | `gpt-6.1-sol --effort xhigh` | Spend more reasoning on the specific difficulty |
-| Well-briefed implementation, mechanical edits, tests, refactors with a plan | `gpt-6-luna --effort xhigh` | Lower token rates for bounded work that can be verified and reviewed |
-| Fleet workers | `gpt-6-luna --effort xhigh` | Select each worker separately; use Sol when it needs broader judgment |
-| Large-context or under-specified work | `gpt-6.1-sol --effort xhigh` | Clarify the brief and trim irrelevant context before launching |
-| Repo exploration, running checks, git operations, extraction | `gpt-6-luna --effort xhigh` | Lower token rates for exact steps and checks |
-| Hardest technical or scientific tasks beyond Sol's demonstrated capability | `gpt-6-astra --effort high` | Delegate only the hard portion, keep the context tight, and never fan it out |
-| Review of a diff | `gpt-6.1-sol --effort xhigh` with the review schema | Inspect contract fidelity and resolve findings against source |
+| Ordinary implementation, authenticated browsing, administrative work | `--model sol --effort xhigh` | Default for work that needs judgment across several steps |
+| Planning, decomposition, architecture, final merge decision | `--model sol --effort xhigh` | Reconcile constraints and give bounded workers a clear plan |
+| Subtle debugging, security, concurrency, unresolved cross-file reasoning | `--model sol --effort xhigh` | Spend more reasoning on the specific difficulty |
+| Well-briefed implementation, mechanical edits, tests, refactors with a plan | `--model luna --effort xhigh` | Lower token rates for bounded work that can be verified and reviewed |
+| Fleet workers | `--model luna --effort xhigh` | Select each worker separately; use Sol when it needs broader judgment |
+| Large-context or under-specified work | `--model sol --effort xhigh` | Clarify the brief and trim irrelevant context before launching |
+| Repo exploration, running checks, git operations, extraction | `--model luna --effort xhigh` | Lower token rates for exact steps and checks |
+| Hardest technical or scientific tasks beyond Sol's demonstrated capability | `--model astra --effort high` | Delegate only the hard portion, keep the context tight, and never fan it out |
+| Review of a diff | `--model sol --effort xhigh` with the review schema | Inspect contract fidelity and resolve findings against source |
 
 Rules that go with the table:
 
@@ -54,8 +61,9 @@ Rules that go with the table:
   Give it implementation only when the brief includes the plan, file scope,
   acceptance criteria, and verified commands. Review its diff for unrequested
   edits.
-- Sol means `gpt-6.1-sol`; Luna means `gpt-6-luna`. Do not route new work
-  to Terra or an older Sol/Luna by default. Explicit user choices still win.
+- A tier resolves to the catalog's first-priority model for it, normally
+  the newest release. Do not route new work to Terra or to an older Sol or
+  Luna model by naming its ID. Explicit user choices still win.
 - Sol runs at `xhigh` for every task shape: implementation, reviews,
   planning, routine navigation, authenticated browsing, administrative
   audits, tracker synchronization, and debugging. Use another Sol effort
@@ -84,8 +92,10 @@ Rules that go with the table:
   It starts Codex without the user's `config.toml` (MCP servers,
   connector apps, hooks, personality, context overrides) while auth,
   the repository `AGENTS.md`, and execpolicy rules still load. Measured
-  on a 2026-09-11 GPT-5.6 Luna probe it cut first-request context from 25.1k to 17.2k
-  tokens and removed MCP startup errors. `--lean` needs an explicit
+  on a 2026-09-11 probe of the Luna tier, it cut first-request context from 25.1k to 17.2k
+  tokens and removed MCP startup errors. Because it skips `config.toml`,
+  it also skips a custom `model_provider`; on a machine that reaches Codex
+  through a proxy, run workers without `--lean`. `--lean` needs an explicit
   model and effort and is not available on resume, fork, or `--local`.
   Keep the full config for planning and review sessions, anything that
   needs Computer Use, Chrome, a browser profile, or an MCP server, and
@@ -94,9 +104,9 @@ Rules that go with the table:
   intentionally revised, preserves unrelated text, and requires disclosure
   of every changed file and any edits beyond the brief. Review the result
   against that scope.
-- Host defaults `CDX_DEFAULT_MODEL` and `CDX_DEFAULT_EFFORT` apply only
-  when Claude passes no flags; the table above means Claude usually
-  passes them.
+- Host defaults `CDX_DEFAULT_MODEL` (a tier or a model ID) and
+  `CDX_DEFAULT_EFFORT` apply only when Claude passes no flags; the table
+  above means Claude usually passes them.
 - Judge efficiency by the verified result, total input and output tokens,
   elapsed time, retries, and review corrections, not by effort labels or
   per-call cost alone.
@@ -104,35 +114,67 @@ Rules that go with the table:
 Dated official evidence and routing rationale behind the table:
 [references/model-routing.md](references/model-routing.md).
 
+## Model tiers on this machine
+
+The runner resolves a tier word (`sol`, `luna`, `astra`, and also `terra`
+and `spark`) in this order:
+
+1. `CDX_MODEL_<TIER>` from the environment, such as `CDX_MODEL_SOL`. It wins
+   unchecked, so it can name a model the catalog does not list.
+2. The catalog Codex itself uses, from `codex debug models`. It applies the
+   effective config, so a `model_catalog_json` file (which replaces the
+   whole catalog) and a proxy's prefixed names appear as Codex accepts them.
+   The tier's model is the one whose name ends in the tier word, after any
+   prefix such as `team/`, with the lowest `priority`.
+3. When `codex debug models` fails on an older CLI: the `model_catalog_json`
+   file named in `config.toml`, else `models_cache.json`, both under
+   `CODEX_HOME` (default `~/.codex`, which is `%USERPROFILE%\.codex` on
+   Windows).
+
+A tier with no model stops the runner before Codex starts, with an error
+that names the catalog and the models it holds. Report that error; do not
+retry with a guessed name or another tier unless the user agrees. An
+explicit `--model <id>` is passed unchanged. To see what each tier
+resolves to, run
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-tiers.mjs"`. The runner summary
+names the resolved model in its `model:` line; report that model in the
+handoff.
+
 ## Token, credit, and speed economics
 
 These Standard rates are credits per million tokens from the
 [Codex rate card](https://learn.chatgpt.com/docs/pricing), checked on
-2026-09-29. API billing and included subscription usage are separate;
-the rate ratios do not predict a weekly allowance's depletion.
+2026-09-29 for the model each tier resolved to on OpenAI's catalog that
+day. A newer release, a proxy, or API-key billing can differ; check the
+rate card for the model the tier resolves to now. API billing and included
+subscription usage are separate; the rate ratios do not predict a weekly
+allowance's depletion.
 
-| Model | Input | Cached input | Output | Relative to GPT-6.1 Sol |
+| Tier | Input | Cached input | Output | Relative to Sol |
 |---|---:|---:|---:|---:|
-| GPT-6 Astra | 250 | 25 | 1,250 | 5x input/output; 10x cached input |
-| GPT-6.1 Sol | 50 | 2.5 | 250 | 1x |
-| GPT-6 Luna | 2.5 | 0.25 | 12.5 | 0.05x input/output; 0.1x cached input |
+| Astra | 250 | 25 | 1,250 | 5x input/output; 10x cached input |
+| Sol | 50 | 2.5 | 250 | 1x |
+| Luna | 2.5 | 0.25 | 12.5 | 0.05x input/output; 0.1x cached input |
 
 Repeated context and reasoning output both affect total usage. Measure actual
 tokens, elapsed time, retries, and review corrections before concluding that
-a model or effort is cheaper for the completed task. Older GPT-5.6 measurements
-do not establish GPT-6.1 performance or subscription consumption.
+a model or effort is cheaper for the completed task. Measurements of an
+older release in a tier do not establish a newer one's performance or
+subscription consumption.
 
 `--fast` is a paid speed tier, independent of reasoning effort and model
 quality. The [Codex speed documentation](https://learn.chatgpt.com/docs/agent-configuration/speed)
-lists GPT-6.1 Sol, GPT-6 Sol/Luna, and Astra where supported. Fast uses included
+lists the Sol, Luna, and Astra models where supported; the catalog's
+`service_tiers` field shows what the resolved model offers. Fast uses included
 subscription limits at 2.5x Standard and purchased credits or Enterprise
 pay-as-you-go usage at 2x. These are billing multipliers, not task-speed
-guarantees. Report the tier in the handoff. GPT-6.1 Sol Ultrafast is coming
-soon as of 2026-09-29; `--fast` selects Fast only.
+guarantees. Report the speed tier in the handoff. `--fast` selects Fast only,
+never Ultrafast.
 
 With an API key, Codex uses API token pricing and ChatGPT credit multipliers
-do not apply. Codex-Spark is a separate model with its own limits; preserve
-an explicit request for it and check account availability.
+do not apply. Spark is a separate model with its own limits (`--model spark`
+resolves it when the catalog has one); preserve an explicit request for it
+and check account availability.
 
 ## Invocation contract
 
@@ -181,24 +223,29 @@ user asks for it, and computer use.
 
 ## Codex as a subagent
 
-The cdx mod registers three Agent tool types: `cdx:codex-sol`
-(`gpt-6.1-sol`), `cdx:codex-luna` (`gpt-6-luna`), and `cdx:codex-astra`
-(`gpt-6-astra`). Spawning one runs the runner for that model, and
+The cdx mod registers up to three Agent tool types, one per tier:
+`cdx:codex-sol`, `cdx:codex-luna`, and `cdx:codex-astra`. At session start it
+resolves each tier as described in "Model tiers on this machine" and names
+the resolved model in the type's description. A tier the catalog lacks is
+not registered, and a transcript line says why. Spawning one runs the
+runner with that tier, which resolves it again on each run, and
 `SendMessage` to the agent resumes the same Codex session. Use an agent
 when the conversation with Codex will take more than one turn, or when
 named agents should run in the background and report back. Use the runner
 directly for one-shot runs, `--fork`, `--local`, native reviews, and cloud.
 
-- Choose the agent type from the model table above. The Agent tool's
+- Choose the agent type from the tier table above. The Agent tool's
   `model` parameter selects Claude models only; it does not choose Codex's.
+  When the type for a tier is missing, that tier has no model here: report
+  it, or use the runner with a model the user names.
 - Each run is read-only, at `xhigh` effort for `codex-sol` and
   `codex-luna` and `high` for `codex-astra`. To change that, make the
   prompt's first line a `cdx:` header of runner flags, such as
   `cdx: --sandbox write --effort high --search`. The header accepts
   `--sandbox`, `--effort`, `--search`, `--fast`, `--lean`,
   `--approve-for-me`, `--schema <name|path>`, `--image`, and `--add-dir`.
-  The agent type sets the model, and the mod sets the session and working
-  directory. It refuses `-c`: a config override can replace the sandbox or
+  The agent type sets the tier, `CDX_MODEL_<TIER>` overrides its model,
+  and the mod sets the session and working directory. It refuses `-c`: a config override can replace the sandbox or
   approval policy. Use the runner directly when a run needs `-c`.
 - Codex can message you mid-run with its `message_claude` tool. A message
   arrives as a prompt from the cdx plugin naming the agent, and the agent
@@ -271,14 +318,11 @@ example, "Commit was attempted, and `workspace-write` rejected the worktree's
   approval requests to a reviewer; it does not grant blanket permission
   or bypass the sandbox.
 - **--model** and **--effort**: set both from the table in "Choose the
-  model first" unless the user named them; pass a user-named model
-  unchanged, including `gpt-6-astra`. Use only effort levels the
-  installed CLI supports for that model: GPT-6.1 Sol and Astra start at `low`
-  (`none` and `minimal` are unsupported), Luna has no `ultra`, and
-  `xhigh` is not a universal maximum. The `spark` alias maps to
-  `gpt-5.3-codex-spark`; use it when requested and available to the
-  account. See the dated model notes in the flag map for `max` and
-  CLI-specific `ultra` availability.
+  model first" unless the user named them. Pass a tier word; pass a
+  user-named model ID unchanged. Use only effort levels the resolved model
+  supports: its `supported_reasoning_levels` in `codex debug models` list
+  them, and `xhigh` is not a universal maximum. See the dated notes in the
+  flag map for `max` and CLI-specific `ultra` availability.
 - **--lean**: strip the user's config for a worker (see "Choose the
   model first"). Fresh runs only, explicit model required, never with
   `--local` or a task that needs an MCP server or a UI plugin.
