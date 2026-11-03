@@ -88,6 +88,7 @@ test("model_catalog_json is read from config.toml's top level, with Windows path
     "C:\\Users\\PC\\.codex\\proxy-model-catalog.json");
   assert.equal(catalogPathFromToml("model_catalog_json = 'C:\\Users\\PC\\.codex\\proxy-model-catalog.json'\r\n"),
     "C:\\Users\\PC\\.codex\\proxy-model-catalog.json");
+  assert.equal(catalogPathFromToml('model_catalog_json = "C:\\Users\\PC\\catalog.json"\n'), "C:\\Users\\PC\\catalog.json");
   assert.equal(catalogPathFromToml('[profiles.p]\nmodel_catalog_json = "p.json"\n'), null);
   assert.equal(catalogPathFromToml(null), null);
 });
@@ -137,6 +138,16 @@ test("a configured model_catalog_json is the whole catalog, even when `codex deb
   assert.equal(plan.luna.register, true);
   assert.equal(plan.astra.register, false);
   assert.match(plan.astra.notice, /codex-astra is not registered/);
+});
+
+test("a -c catalog resolves relative to the working directory, and a quoted Windows path does not throw", (t) => {
+  const { home, env } = mixedCatalogHome(t);
+  const work = scratch(t);
+  writeFileSync(path.join(work, "here.json"), JSON.stringify({ models: [{ slug: "work/gpt-6-astra", priority: 1 }] }));
+  const r = loadCodexCatalog({ bin: FAKE, overrides: ['model_catalog_json="here.json"'], env, cwd: work });
+  assert.equal(r.source, path.join(work, "here.json"));
+  const win = loadCodexCatalog({ bin: FAKE, overrides: ['model_catalog_json="C:\\Users\\PC\\.codex\\missing.json"'], env, cwd: home });
+  assert.match(win.error, /model_catalog_json file .*missing\.json could not be read/);
 });
 
 test("CDX_MODEL_<TIER> still wins over a configured catalog", (t) => {

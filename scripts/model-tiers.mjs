@@ -78,9 +78,19 @@ export function catalogPathFromToml(text) {
   for (const line of String(text ?? "").split(/\r?\n/)) {
     if (/^\s*\[/.test(line)) break;
     const m = /^\s*model_catalog_json\s*=\s*(?:"((?:[^"\\]|\\.)*)"|'([^']*)')/.exec(line);
-    if (m) return m[2] ?? JSON.parse(`"${m[1]}"`);
+    if (m) return m[2] ?? unquoteBasic(m[1]);
   }
   return null;
+}
+
+// A TOML basic string's contents with escapes applied, or the raw contents
+// when an escape is invalid (a Windows path written with single backslashes).
+function unquoteBasic(inner) {
+  try {
+    return JSON.parse(`"${inner}"`);
+  } catch {
+    return inner;
+  }
 }
 
 // A `-c model_catalog_json=<value>` override, as passed to the runner.
@@ -89,7 +99,7 @@ function catalogPathFromOverrides(overrides) {
     const m = /^\s*model_catalog_json\s*=\s*(.+)$/.exec(o);
     if (!m) continue;
     const v = m[1].trim();
-    return /^(".*"|'.*')$/.test(v) ? (v[0] === '"' ? JSON.parse(v) : v.slice(1, -1)) : v;
+    return /^(".*"|'.*')$/.test(v) ? (v[0] === '"' ? unquoteBasic(v.slice(1, -1)) : v.slice(1, -1)) : v;
   }
   return null;
 }
@@ -104,16 +114,25 @@ function expandPath(p, home) {
 }
 
 // The model_catalog_json named by a -c override or config.toml: null when none
-// is configured, else { file, models } or { file, error }.
-function configuredCatalog(overrides, env) {
+// is configured, else { file, models } or { file, error }. Codex resolves a
+// relative path from -c against its working directory (the runner's, since it
+// starts Codex without changing directory, even with --cd) and one from
+// config.toml against CODEX_HOME.
+function configuredCatalog(overrides, env, cwd) {
   const home = codexHome(env);
-  let configText = null;
-  try {
-    configText = readFileSync(path.join(home, "config.toml"), "utf8");
-  } catch {}
-  const named = catalogPathFromOverrides(overrides) ?? catalogPathFromToml(configText);
+  const fromOverride = catalogPathFromOverrides(overrides);
+  let named = fromOverride;
+  let base = cwd;
+  if (named == null) {
+    let configText = null;
+    try {
+      configText = readFileSync(path.join(home, "config.toml"), "utf8");
+    } catch {}
+    named = catalogPathFromToml(configText);
+    base = home;
+  }
   if (!named) return null;
-  const file = expandPath(named, home);
+  const file = expandPath(named, base);
   try {
     return { file, models: parseCatalog(readFileSync(file, "utf8")) };
   } catch (err) {
@@ -125,15 +144,15 @@ function configuredCatalog(overrides, env) {
 // A configured model_catalog_json is read from its file alone: Codex 0.165
 // lists its built-in models beside that catalog in `codex debug models`, and
 // the provider behind the catalog may refuse those built-in names.
-export function loadCodexCatalog({ bin = process.env.CDX_CODEX_BIN || "codex", overrides = [], env = process.env } = {}) {
-  const configured = configuredCatalog(overrides, env);
+export function loadCodexCatalog({ bin = process.env.CDX_CODEX_BIN || "codex", overrides = [], env = process.env, cwd = process.cwd() } = {}) {
+  const configured = configuredCatalog(overrides, env, cwd);
   if (configured?.error) {
     return { error: `the model_catalog_json file ${configured.file} could not be read (${configured.error})` };
   }
   if (configured) return { models: configured.models, source: configured.file };
 
   const argv = ["debug", "models", ...overrides.flatMap((c) => ["-c", c])];
-  const r = spawnSync(bin, argv, { encoding: "utf8", env, timeout: 20_000, windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+  const r = spawnSync(bin, argv, { encoding: "utf8", env, cwd, timeout: 20_000, windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
   let cliProblem;
   if (r.error) cliProblem = r.error.message;
   else if (r.status !== 0) cliProblem = `exit ${r.status}: ${(r.stderr || "").trim().split("\n").pop()}`;
