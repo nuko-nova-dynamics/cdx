@@ -79,10 +79,12 @@ request matches, so you ask in plain language; you can also type
 
 ## Codex as a subagent
 
-cdx includes a mod that registers three Agent tool types:
-`cdx:codex-sol`, `cdx:codex-luna`, and `cdx:codex-astra`. Claude spawns one
-like any other subagent. The mod answers the agent's model requests by
-running the runner with that Codex model, so the agent's reply is Codex's
+cdx includes a mod that registers up to three Agent tool types, one per
+model tier: `cdx:codex-sol`, `cdx:codex-luna`, and `cdx:codex-astra`. A tier
+whose model your Codex catalog lacks is not registered, and a transcript line
+says why. Claude spawns one like any other subagent. The mod answers the
+agent's model requests by running the runner with that tier, so the agent's
+reply is Codex's
 result and no Claude request is made for it. `SendMessage` to the agent
 resumes the same Codex session, and named agents can run in the background.
 
@@ -94,7 +96,7 @@ to explain the root cause.
 Runs are read-only, at `xhigh` effort for `codex-sol` and `codex-luna` and
 `high` for `codex-astra`. The prompt's first line can be a `cdx:` header of
 runner flags, such as `cdx: --sandbox write --effort high`; the agent type sets
-the model. Follow-ups keep the previous sandbox and effort. Progress (commands,
+the tier. Follow-ups keep the previous sandbox and effort. Progress (commands,
 edits, searches) streams while Codex works. With `isolation: "worktree"`, Codex
 runs in the agent's worktree.
 
@@ -185,42 +187,61 @@ contract and [official setup](https://learn.chatgpt.com/docs/computer-use).
 
 ## Models and reasoning
 
-The runner inherits your Codex model and effort by default. Explicit model IDs
-pass through unchanged; `spark` remains an alias for `gpt-5.3-codex-spark` when
-your account supports it. Set `CDX_DEFAULT_MODEL` and `CDX_DEFAULT_EFFORT` in
-the host environment (for example the `env` block of Claude Code's
-`settings.json`) to change the default without touching `config.toml`; explicit
-flags still win.
+cdx never hardcodes a model ID. It routes by tier (Sol, Luna, Astra, plus
+`terra` and `spark`), and `--model <tier>` resolves to the model your machine's
+Codex catalog lists for that tier, in this order:
 
-When no model is named, Claude routes ordinary work and reviews to
-`gpt-6.1-sol`, which always runs at xhigh unless you name another effort.
-GPT-6 Luna (default xhigh) handles bounded checks and implementation with a
-complete brief; Astra (default high) is reserved for a specific difficulty Sol
-is unlikely to handle.
-New work does not default to Terra. Each fleet worker gets its own model and
-effort choice. These are routing policies informed by the
-[September 29 launch](https://openai.com/index/introducing-gpt-6-1-sol/),
-not a benchmark guarantee for your task.
+1. `CDX_MODEL_SOL`, `CDX_MODEL_LUNA`, `CDX_MODEL_ASTRA` (and so on) from the
+   environment.
+2. `codex debug models`, which applies your effective config. A
+   `model_catalog_json` file replaces the catalog, so a proxy that only
+   accepts prefixed names such as `team/<model>` (an example) resolves to
+   those names.
+3. If that command fails on an older CLI: the `model_catalog_json` file named
+   in `config.toml`, else `models_cache.json`, both under `CODEX_HOME`
+   (default `~/.codex`; `%USERPROFILE%\.codex` on Windows).
+
+A tier with no model stops the run before Codex starts, with an error naming
+the catalog and its models. An explicit model ID passes through unchanged. To
+see what each tier resolves to:
+
+```bash
+node scripts/codex-tiers.mjs
+```
+
+The runner inherits your Codex model and effort when no flag is given. Set
+`CDX_DEFAULT_MODEL` (a tier or an ID) and `CDX_DEFAULT_EFFORT` in the host
+environment (for example the `env` block of Claude Code's `settings.json`) to
+change the default without touching `config.toml`; explicit flags still win.
+
+When no model is named, Claude routes ordinary work and reviews to the Sol
+tier, which always runs at xhigh unless you name another effort. Luna (default
+xhigh) handles bounded checks and implementation with a complete brief; Astra
+(default high) is reserved for a specific difficulty Sol is unlikely to handle.
+New work does not default to Terra. Each fleet worker gets its own tier and
+effort choice. These are routing policies, not a benchmark guarantee for your
+task.
 
 Mechanical workers use `--lean`, which starts Codex without your
 `config.toml` (MCP servers, connector apps, hooks, personality, context
 overrides) while auth, repository `AGENTS.md`, and `.rules` still load.
 It needs an explicit model and is unavailable on resume, fork, or `--local`.
+It also skips a custom `model_provider`, so workers on a proxied machine run
+without it.
 Tasks needing UI plugins or MCP servers keep the full configuration. See the
 [model routing reference](skills/driving-codex/references/model-routing.md).
 
 ```bash
-node scripts/codex-run.mjs --sandbox ro --model gpt-6.1-sol --effort xhigh -- "Review this repository"
+node scripts/codex-run.mjs --sandbox ro --model sol --effort xhigh -- "Review this repository"
 node scripts/codex-run.mjs --sandbox ro --fork <session-id>
 ```
 
-Reasoning levels depend on the model. GPT-6.1 Sol's API supports `low`,
-`medium`, `high`, `xhigh`, and `max`; neither `none` nor `minimal` is supported.
-Use CLI-specific `ultra` only when the live catalog supports it. Luna has no
-`ultra`. Fast and Ultrafast are serving tiers, separate from effort. The runner's
-`--fast` requests paid Fast serving only; Sol Ultrafast is coming soon as of
-September 29. See the [flag reference](skills/driving-codex/references/flag-map.md)
-for catalog and billing distinctions.
+Reasoning levels depend on the model: the resolved model's
+`supported_reasoning_levels` in `codex debug models` list them. Fast and
+Ultrafast are serving tiers, separate from effort. The runner's `--fast`
+requests paid Fast serving only. See the
+[flag reference](skills/driving-codex/references/flag-map.md) for catalog and
+billing distinctions.
 
 ## Safety model
 
@@ -242,7 +263,7 @@ for catalog and billing distinctions.
 ```bash
 node --test tests/*.test.mjs   # unit tests (stub codex, free)
 bash tests/smoke.sh            # real Codex calls using your configured model
-CDX_SMOKE_MODEL=gpt-6.1-sol CDX_SMOKE_EFFORT=low bash tests/smoke.sh
+CDX_SMOKE_MODEL=sol CDX_SMOKE_EFFORT=low bash tests/smoke.sh
 ```
 
 The live smoke covers structured output, session recall, fork creation and

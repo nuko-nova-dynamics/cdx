@@ -2,6 +2,17 @@
 // Emit deterministic CLI events without contacting a model.
 const fs = require("node:fs");
 const args = process.argv.slice(2);
+// `debug models` prints the catalog in FAKE_CODEX_CATALOG, or fails when
+// FAKE_CODEX_DEBUG is "fail" (an older CLI without the subcommand).
+if (args[0] === "debug" && args[1] === "models") {
+  if (process.env.FAKE_CODEX_DEBUG_ARGS_FILE) fs.writeFileSync(process.env.FAKE_CODEX_DEBUG_ARGS_FILE, args.join("\n") + "\n");
+  if (process.env.FAKE_CODEX_DEBUG === "fail" || !process.env.FAKE_CODEX_CATALOG) {
+    process.stderr.write("error: unrecognized subcommand 'debug'\n");
+    process.exit(2);
+  }
+  process.stdout.write(fs.readFileSync(process.env.FAKE_CODEX_CATALOG, "utf8"));
+  process.exit(0);
+}
 if (process.env.FAKE_CODEX_ARGS_FILE) {
   fs.writeFileSync(process.env.FAKE_CODEX_ARGS_FILE, args.join("\n") + "\n");
 }

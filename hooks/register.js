@@ -1,29 +1,30 @@
 // cdx mod: Codex as Agent tool subagents, and turn-end notices for the
 // computer-use server (scripts/codex-cu-mcp.mjs). Registers cdx:codex-sol,
-// cdx:codex-luna, and cdx:codex-astra, whose model ids carry a prefix
-// (MODEL_PREFIX). Each request such an agent makes is answered here by running
-// the Codex runner, so the Agent tool spawns Codex and SendMessage resumes its
-// session. Progress streams as thinking, which is shown and not recorded.
+// cdx:codex-luna, and cdx:codex-astra, whose model ids are a prefix
+// (MODEL_PREFIX) and a Codex tier. A tier is registered only when the
+// machine's Codex catalog has a model for it (scripts/codex-tiers.mjs). Each
+// request such an agent makes is answered here by running the Codex runner,
+// so the Agent tool spawns Codex and SendMessage resumes its session. Progress streams as thinking, which is shown and not recorded.
 // Messages Codex sends with its message_claude tool go to whoever spawned the
 // agent while it keeps running (deliverMessage).
 import {
-  AGENTS,
   MAX_MESSAGES,
   PROGRESS_PREFIX,
   RECORD_PREFIX,
   RECORD_TTL_MS,
   agentSpec,
   answerText,
-  codexModelOf,
   isTeammateRequest,
   lineBuffer,
   messageOf,
   messagePrompt,
   parseRequest,
+  registrationPlan,
   runnerArgs,
   sessionOfProgress,
   teammateAnswer,
   threadIdOf,
+  tierOfStepModel,
 } from "./codex-agent.js";
 import { COMPUTER_USE_TOOL, approvalPolicyFromToml } from "./computer-use.js";
 
@@ -70,6 +71,20 @@ async function deliverMessage($, agentId, text) {
   await $.prompt.submit({ text: prompt });
 }
 
+// The runner's tier resolution as JSON, or null when it could not run. The
+// runner's catalog read times out on its own, so this cannot hang the start.
+async function resolveTiers($) {
+  try {
+    let stdout = "";
+    const stream = $.process.spawn({ argv: ["node", `${$.plugin.root}/scripts/codex-tiers.mjs`, "--json"] });
+    for await (const piece of stream) if (piece.stream === "stdout") stdout += piece.text;
+    return JSON.parse(stdout);
+  } catch (err) {
+    $.ui.log(`cdx: could not resolve Codex tiers: ${err?.message ?? err}`, { to: "debug" });
+    return null;
+  }
+}
+
 async function codexApprovalPolicy($) {
   const home = (await $.env.get("CODEX_HOME")) || `${await $.env.get("HOME")}/.codex`;
   const text = await $.fs.read(`${home}/config.toml`).catch(() => null);
@@ -104,9 +119,13 @@ export function register(on) {
 
   on("session.start", async ($, e, next) => {
     const started = await next(e);
-    for (const agent of AGENTS) {
+    for (const { agent, register: ok, resolved, notice } of registrationPlan(await resolveTiers($))) {
+      if (!ok) {
+        $.ui.log(notice);
+        continue;
+      }
       try {
-        await $.agent.register(agentSpec(agent));
+        await $.agent.register(agentSpec(agent, resolved));
       } catch (err) {
         $.ui.log(`cdx: could not register ${agent.name}: ${err?.message ?? err}`, { to: "debug" });
       }
@@ -126,8 +145,8 @@ export function register(on) {
   });
 
   on("turn.step", async function* ($, e, next) {
-    const model = codexModelOf(e.model);
-    if (!model || !e.agentId) return yield* next(e);
+    const tier = tierOfStepModel(e.model);
+    if (!tier || !e.agentId) return yield* next(e);
 
     // A rejected read must not fail the hook: Claude Code would then send the
     // request to the API under the cdx-codex- model id.
@@ -147,7 +166,7 @@ export function register(on) {
       const { argv, sandbox, effort } = runnerArgs({
         runner: `${root}/scripts/codex-run.mjs`,
         schemasDir: `${root}/schemas`,
-        model,
+        tier,
         record,
         request,
       });

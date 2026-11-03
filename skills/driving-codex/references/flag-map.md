@@ -14,7 +14,7 @@ Recheck the installed command help when versions differ. The runner's
 | `-o, --output-last-message <file>` | Always set |
 | `--sandbox <read-only\|workspace-write\|danger-full-access>` | Required runner `--sandbox ro\|write\|full` |
 | `--approve-for-me` | Explicit opt-in to automatic approval review; runner requires fresh `--sandbox write` |
-| `--model <model>` | `--model`; only `spark` is an alias, for `gpt-5.3-codex-spark` |
+| `--model <model>` | `--model <id\|tier>`; a tier word (`sol`, `luna`, `astra`, `terra`, `spark`) resolves through `CDX_MODEL_<TIER>`, then `codex debug models`; an ID passes unchanged |
 | `-c model_reasoning_effort="<level>"` | `--effort`; model support varies, see below |
 | `-c service_tier="fast"` | `--fast`; see availability and cost notes below |
 | `--ignore-user-config` + `-c apps._default.enabled=false` | `--lean`; fresh runs only, explicit model required, not with `--local`. Verified on codex-cli 0.154.0 (2026-09-11): auth, repository `AGENTS.md`, `$CODEX_HOME/AGENTS.md`, and `.rules` still load; MCP servers, connector apps, hooks, personality, and config overrides do not |
@@ -36,29 +36,28 @@ their exact syntax. Do not assume every CLI flag has a config equivalent.
 
 The runner accepts `none`, `minimal`, `low`, `medium`, `high`, `xhigh`,
 `max`, and `ultra` as a union of CLI effort settings; each model supports
-its own subset. Choose model and effort from the skill's "Choose the
+its own subset. Choose tier and effort from the skill's "Choose the
 model first" table unless the user named them; unset flags fall back to
 `CDX_DEFAULT_MODEL` / `CDX_DEFAULT_EFFORT`, then the user's configuration.
 
-The local codex-cli 0.159.0 catalog inspected on 2026-09-29 advertised `low`,
-`medium`, `high`, `xhigh`, `max`, and `ultra` for `gpt-6.1-sol` and Astra.
-Luna advertised `low` through `max` without `ultra`. The public
-[GPT-6.1 Sol API model card](https://developers.openai.com/api/docs/models/gpt-6.1-sol)
-lists `low` through `max`, with `medium` as its API default; `none` and
-`minimal` are unsupported. Treat `ultra` as CLI/account-dependent and recheck
-the live catalog. `xhigh` is not a universal maximum.
+The resolved model's `supported_reasoning_levels` in `codex debug models`
+list the efforts it accepts. On 2026-09-29 the codex-cli 0.159.0 catalog
+advertised `low` through `ultra` for the Sol and Astra models and `low`
+through `max` for Luna; the public API model card for that Sol release
+listed `low` through `max`, with `none` and `minimal` unsupported. Treat
+`ultra` as CLI/account-dependent and recheck the live catalog. `xhigh` is
+not a universal maximum.
 
 The [Codex speed documentation](https://learn.chatgpt.com/docs/agent-configuration/speed)
-lists Standard and Fast for GPT-6.1 Sol where available. Fast uses included
+lists Standard and Fast for the Sol model where available. Fast uses included
 subscription limits at 2.5x Standard, or purchased credits and Enterprise
 pay-as-you-go usage at 2x. These billing multipliers do not describe speed or
 API-key billing. Access depends on the model, account, client, and rollout;
 Fast may also require `features.fast_mode=true` in the active configuration.
 
-GPT-6.1 Sol Ultrafast is coming soon as of 2026-09-29, according to the
-[DevDay announcement](https://openai.com/index/devday-2026-recap/). Astra
-Ultrafast is a separate tier on eligible plans. This runner exposes Fast
-only; `--fast` does not request Ultrafast. Neither tier changes effort.
+Ultrafast is a separate speed tier; the resolved model's `service_tiers`
+show whether it offers one. This runner exposes Fast only; `--fast` does
+not request Ultrafast. Neither tier changes effort.
 
 The same source describes Spark as a separate model with its own
 limits, available to ChatGPT Pro during research preview. Do not use

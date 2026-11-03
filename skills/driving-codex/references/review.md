@@ -16,7 +16,7 @@ Preserve any supplied focus, and report the target used.
 
 Default structured path, through a Codex agent:
 1. Spawn the reviewer with the Agent tool: `subagent_type: "cdx:codex-sol"`
-   (or the agent type for a model the user named), a `name` such as
+   (or the agent type for a tier the user named), a `name` such as
    `review-<target>`, and `run_in_background: true`. The prompt's first line
    is the header, then the review prompt:
    ```text
@@ -35,7 +35,7 @@ Default structured path, through a Codex agent:
    resumes the same Codex session with the same sandbox and effort.
 
 If the `cdx:codex-*` agent types are not available (mods are off), run the
-runner with Bash instead: `--sandbox ro --model gpt-6.1-sol --effort xhigh
+runner with Bash instead: `--sandbox ro --model sol --effort xhigh
 --schema "${CLAUDE_PLUGIN_ROOT}/schemas/review-findings.schema.json" -- <the
 same prompt>`, then follow step 2.
 

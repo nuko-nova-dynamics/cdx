@@ -4,25 +4,67 @@ import {
   AGENTS,
   agentSpec,
   answerText,
-  codexModelOf,
   isTeammateRequest,
   lineBuffer,
   messageOf,
   messagePrompt,
   parseRequest,
+  registrationPlan,
   runnerArgs,
   sessionOfProgress,
   TEAMMATE_ANSWER_LIMIT,
   teammateAnswer,
   threadIdOf,
+  tierOfStepModel,
 } from "../hooks/codex-agent.js";
 
-const base = { runner: "/p/scripts/codex-run.mjs", schemasDir: "/p/schemas", model: "gpt-6.1-sol" };
+const base = { runner: "/p/scripts/codex-run.mjs", schemasDir: "/p/schemas", tier: "sol" };
 
-test("each agent type's model routes back to its Codex model; other models do not", () => {
-  for (const agent of AGENTS) assert.equal(codexModelOf(agentSpec(agent).model), agent.model);
-  assert.equal(codexModelOf("claude-opus-5-5"), null);
-  assert.equal(codexModelOf("cdx-codex-"), null);
+test("each agent type's model routes back to its tier; other models do not", () => {
+  for (const agent of AGENTS) assert.equal(tierOfStepModel(agentSpec(agent).model), agent.tier);
+  assert.equal(tierOfStepModel("claude-opus-5-5"), null);
+  assert.equal(tierOfStepModel("cdx-codex-"), null);
+  assert.equal(tierOfStepModel("cdx-codex-gemini"), null);
+});
+
+test("an agent spawned before tiers, under a model id, still routes by its tier", () => {
+  assert.equal(tierOfStepModel("cdx-codex-gpt-6.1-sol"), "sol");
+  assert.equal(tierOfStepModel("cdx-codex-gpt-6-luna"), "luna");
+});
+
+test("no agent type carries a model id; the description names what the tier resolved to", () => {
+  for (const agent of AGENTS) {
+    assert.equal(agentSpec(agent).model, `cdx-codex-${agent.tier}`);
+    assert.doesNotMatch(agentSpec(agent).description, /gpt-/i);
+  }
+  const spec = agentSpec(AGENTS[0], { model: "cousin-full-service/gpt-6.1-sol", source: "codex debug models" });
+  assert.match(spec.description, /resolves to `cousin-full-service\/gpt-6\.1-sol`/);
+  assert.equal(spec.model, "cdx-codex-sol");
+});
+
+test("a tier missing from a readable catalog is not registered and gets a notice", () => {
+  const resolution = {
+    catalog: { source: "codex debug models" },
+    tiers: {
+      sol: { model: "p/gpt-6.1-sol", tier: "sol", source: "codex debug models" },
+      luna: { model: "p/gpt-6-luna", tier: "luna", source: "codex debug models" },
+      astra: { error: "no astra model in this machine's Codex catalog" },
+    },
+  };
+  const plan = Object.fromEntries(registrationPlan(resolution).map((p) => [p.agent.tier, p]));
+  assert.equal(plan.sol.register, true);
+  assert.equal(plan.sol.resolved.model, "p/gpt-6.1-sol");
+  assert.equal(plan.astra.register, false);
+  assert.match(plan.astra.notice, /codex-astra is not registered: no astra model/);
+});
+
+test("an unreadable catalog registers every type and leaves the error to the runner", () => {
+  for (const resolution of [null, { catalog: { error: "codex not found" }, tiers: { sol: { error: "x" } } }]) {
+    for (const p of registrationPlan(resolution)) {
+      assert.equal(p.register, true);
+      assert.equal(p.resolved, null);
+    }
+  }
 });
 
 test("each agent type's description sends T3 Code threads to delegate_task", () => {
@@ -33,11 +75,11 @@ test("a plain prompt runs read-only at the agent type's default effort with prog
   const request = parseRequest("Fix the failing test");
   const { argv } = runnerArgs({ ...base, request });
   assert.deepEqual(argv, [
-    "node", "/p/scripts/codex-run.mjs", "--progress", "--claude-channel", "--sandbox", "ro", "--model", "gpt-6.1-sol",
+    "node", "/p/scripts/codex-run.mjs", "--progress", "--claude-channel", "--sandbox", "ro", "--model", "sol",
     "--effort", "xhigh", "--", "Fix the failing test",
   ]);
-  assert.equal(runnerArgs({ ...base, model: "gpt-6-luna", request }).effort, "xhigh");
-  assert.equal(runnerArgs({ ...base, model: "gpt-6-astra", request }).effort, "high");
+  assert.equal(runnerArgs({ ...base, tier: "luna", request }).effort, "xhigh");
+  assert.equal(runnerArgs({ ...base, tier: "astra", request }).effort, "high");
 });
 
 test("a cdx: header sets flags, resolves bundled schema names, and is removed from the prompt", () => {
@@ -51,7 +93,7 @@ test("a cdx: header sets flags, resolves bundled schema names, and is removed fr
 test("a follow-up resumes the recorded session with its sandbox and effort unless the header changes them", () => {
   const record = { thread: "t-1", sandbox: "write", effort: "high" };
   const kept = runnerArgs({ ...base, record, request: parseRequest("continue") }).argv;
-  assert.deepEqual(kept.slice(4, 12), ["--sandbox", "write", "--model", "gpt-6.1-sol", "--effort", "high", "--resume", "t-1"]);
+  assert.deepEqual(kept.slice(4, 12), ["--sandbox", "write", "--model", "sol", "--effort", "high", "--resume", "t-1"]);
   const changed = runnerArgs({ ...base, record, request: parseRequest("cdx: --effort low\ncontinue") });
   assert.equal(changed.effort, "low");
   assert.equal(changed.sandbox, "write");

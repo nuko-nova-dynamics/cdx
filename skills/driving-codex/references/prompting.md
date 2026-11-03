@@ -45,9 +45,10 @@ change, with a stopping condition after relevant checks pass. Specify
 concise reporting and distinguish verified facts from inference.
 
 These choices address the behaviors described in OpenAI's
-[Astra prompting guidance](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-6-astra#prompting-best-practices),
-reviewed on 2026-09-05. The recipes remain useful with other Codex models;
-they do not assume every model supports Astra's settings.
+[latest-model prompting guidance](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-6-astra#prompting-best-practices),
+reviewed on 2026-09-05 for the Astra model of that date. The recipes remain
+useful with every tier; they do not assume every model supports Astra's
+settings.
 
 ## Select only the needed detail
 
