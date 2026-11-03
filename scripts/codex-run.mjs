@@ -95,7 +95,7 @@ function parseArgs(argv) {
 const opts = parseArgs(process.argv.slice(2));
 if (opts.help) {
   process.stdout.write(USAGE + `effort: ${[...EFFORTS].join(" | ")} (model-dependent)\n` +
-    `tier: ${TIERS.join(" | ")} resolves through CDX_MODEL_<TIER>, then the Codex catalog (codex debug models)\n` +
+    `tier: ${TIERS.join(" | ")} resolves through CDX_MODEL_<TIER>, then the Codex catalog (model_catalog_json, else codex debug models)\n` +
     "Model and effort inherit Codex settings when omitted. Automatic review requires a fresh --sandbox write run.\n");
   process.exit(0);
 }

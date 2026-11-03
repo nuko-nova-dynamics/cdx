@@ -121,15 +121,17 @@ and `spark`) in this order:
 
 1. `CDX_MODEL_<TIER>` from the environment, such as `CDX_MODEL_SOL`. It wins
    unchecked, so it can name a model the catalog does not list.
-2. The catalog Codex itself uses, from `codex debug models`. It applies the
-   effective config, so a `model_catalog_json` file (which replaces the
-   whole catalog) and a proxy's prefixed names appear as Codex accepts them.
-   The tier's model is the one whose name ends in the tier word, after any
-   prefix such as `team/`, with the lowest `priority`.
-3. When `codex debug models` fails on an older CLI: the `model_catalog_json`
-   file named in `config.toml`, else `models_cache.json`, both under
-   `CODEX_HOME` (default `~/.codex`, which is `%USERPROFILE%\.codex` on
-   Windows).
+2. The `model_catalog_json` file, when `config.toml` (or a `-c` override)
+   sets one. That file alone is the catalog: its provider may refuse any
+   other name, and some Codex versions list built-in models beside it in
+   `codex debug models`.
+3. Otherwise the catalog from `codex debug models`, which applies the
+   effective config, or `models_cache.json` when that command fails on an
+   older CLI. Both files sit under `CODEX_HOME` (default `~/.codex`, which
+   is `%USERPROFILE%\.codex` on Windows).
+
+The tier's model is the catalog entry whose name ends in the tier word,
+after any prefix such as `team/`, with the lowest `priority`.
 
 A tier with no model stops the runner before Codex starts, with an error
 that names the catalog and the models it holds. Report that error; do not

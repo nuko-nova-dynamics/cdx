@@ -2,11 +2,12 @@
 // machine's Codex catalog actually lists, so cdx never sends a guessed name.
 //
 // Order: CDX_MODEL_<TIER> from the environment, then the catalog Codex itself
-// uses. `codex debug models` prints that catalog with the effective config
-// applied, so a `model_catalog_json` (which replaces the catalog) or a proxy's
-// prefixed names show up as Codex will accept them. When that command fails
-// (an older CLI), the catalog is read from disk: `model_catalog_json` from
-// config.toml if set, else `models_cache.json`, both under CODEX_HOME.
+// uses. When config.toml (or a -c override) sets `model_catalog_json`, that
+// file is the catalog and nothing else is consulted: a custom provider accepts
+// only the names it lists, and some Codex versions print built-in models
+// beside it. Otherwise `codex debug models` prints the catalog with the
+// effective config applied; when that command fails (an older CLI),
+// `models_cache.json` under CODEX_HOME is read instead.
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -102,8 +103,35 @@ function expandPath(p, home) {
   return path.isAbsolute(p) ? p : path.resolve(home, p);
 }
 
+// The model_catalog_json named by a -c override or config.toml: null when none
+// is configured, else { file, models } or { file, error }.
+function configuredCatalog(overrides, env) {
+  const home = codexHome(env);
+  let configText = null;
+  try {
+    configText = readFileSync(path.join(home, "config.toml"), "utf8");
+  } catch {}
+  const named = catalogPathFromOverrides(overrides) ?? catalogPathFromToml(configText);
+  if (!named) return null;
+  const file = expandPath(named, home);
+  try {
+    return { file, models: parseCatalog(readFileSync(file, "utf8")) };
+  } catch (err) {
+    return { file, error: err.code ?? err.message };
+  }
+}
+
 // The catalog this machine's Codex uses: { models, source } or { error }.
+// A configured model_catalog_json is read from its file alone: Codex 0.165
+// lists its built-in models beside that catalog in `codex debug models`, and
+// the provider behind the catalog may refuse those built-in names.
 export function loadCodexCatalog({ bin = process.env.CDX_CODEX_BIN || "codex", overrides = [], env = process.env } = {}) {
+  const configured = configuredCatalog(overrides, env);
+  if (configured?.error) {
+    return { error: `the model_catalog_json file ${configured.file} could not be read (${configured.error})` };
+  }
+  if (configured) return { models: configured.models, source: configured.file };
+
   const argv = ["debug", "models", ...overrides.flatMap((c) => ["-c", c])];
   const r = spawnSync(bin, argv, { encoding: "utf8", env, timeout: 20_000, windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
   let cliProblem;
@@ -119,21 +147,11 @@ export function loadCodexCatalog({ bin = process.env.CDX_CODEX_BIN || "codex", o
     }
   }
 
-  const home = codexHome(env);
-  let configText = null;
+  const file = path.join(codexHome(env), "models_cache.json");
   try {
-    configText = readFileSync(path.join(home, "config.toml"), "utf8");
-  } catch {}
-  const named = catalogPathFromOverrides(overrides) ?? catalogPathFromToml(configText);
-  // A configured catalog is the only valid one: falling back to the cache
-  // would offer names the provider may refuse.
-  const file = named ? expandPath(named, home) : path.join(home, "models_cache.json");
-  try {
-    const models = parseCatalog(readFileSync(file, "utf8"));
-    return { models, source: file };
+    return { models: parseCatalog(readFileSync(file, "utf8")), source: file };
   } catch (err) {
-    const what = named ? `the model_catalog_json file ${file}` : file;
-    return { error: `\`${bin} debug models\` failed (${cliProblem}) and ${what} could not be read (${err.code ?? err.message})` };
+    return { error: `\`${bin} debug models\` failed (${cliProblem}) and ${file} could not be read (${err.code ?? err.message})` };
   }
 }
 
