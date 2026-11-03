@@ -9,7 +9,7 @@
 // effective config applied; when that command fails (an older CLI),
 // `models_cache.json` under CODEX_HOME is read instead.
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -72,15 +72,53 @@ export function pickTierModel(models, tier) {
   return candidates[0] ?? null;
 }
 
+// Each line of TOML text that can hold a key, with the [table] it sits under
+// (null at the top level). Lines inside a multi-line string are skipped.
+function tomlLines(text) {
+  const out = [];
+  let table = null;
+  let open = null;
+  for (const line of String(text ?? "").split(/\r?\n/)) {
+    if (open) {
+      if (line.includes(open)) open = null;
+      continue;
+    }
+    const header = /^\s*\[\[?\s*(.*?)\s*\]\]?\s*(#.*)?$/.exec(line);
+    if (header) {
+      table = header[1];
+      continue;
+    }
+    out.push({ table, line });
+    const multi = /=\s*("""|''')(.*)$/.exec(line);
+    if (multi && !multi[2].includes(multi[1])) open = multi[1];
+  }
+  return out;
+}
+
+// A string value written as "basic" or 'literal'.
+const STRING_VALUE = String.raw`(?:"((?:[^"\\]|\\.)*)"|'([^']*)')`;
+
 // A top-level `model_catalog_json` from config.toml text (keys under a
 // [table] belong to that table, and Codex ignores profile-level ones).
 export function catalogPathFromToml(text) {
-  for (const line of String(text ?? "").split(/\r?\n/)) {
-    if (/^\s*\[/.test(line)) break;
-    const m = /^\s*model_catalog_json\s*=\s*(?:"((?:[^"\\]|\\.)*)"|'([^']*)')/.exec(line);
+  const key = new RegExp(String.raw`^\s*model_catalog_json\s*=\s*` + STRING_VALUE);
+  for (const { table, line } of tomlLines(text)) {
+    if (table !== null) continue;
+    const m = key.exec(line);
     if (m) return m[2] ?? unquoteBasic(m[1]);
   }
   return null;
+}
+
+// The project directories config.toml marks `trust_level = "trusted"`.
+export function trustedProjectsFromToml(text) {
+  const header = new RegExp(String.raw`^projects\.` + STRING_VALUE + "$");
+  const trusted = new Set();
+  for (const { table, line } of tomlLines(text)) {
+    const t = table && header.exec(table);
+    if (t && /^\s*trust_level\s*=\s*["']trusted["']/.test(line)) trusted.add(t[2] ?? unquoteBasic(t[1]));
+  }
+  return trusted;
 }
 
 // A TOML basic string's contents with escapes applied, or the raw contents
@@ -113,23 +151,72 @@ function expandPath(p, home) {
   return path.isAbsolute(p) ? p : path.resolve(home, p);
 }
 
-// The model_catalog_json named by a -c override or config.toml: null when none
-// is configured, else { file, models } or { file, error }. Codex resolves a
-// relative path from -c against its working directory (the runner's, since it
-// starts Codex without changing directory, even with --cd) and one from
-// config.toml against CODEX_HOME.
+function readText(file) {
+  try {
+    return readFileSync(file, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function samePath(a, b) {
+  const norm = (p) => {
+    let r = path.resolve(p);
+    try {
+      r = realpathSync(r);
+    } catch {}
+    return process.platform === "win32" ? r.toLowerCase() : r;
+  };
+  return norm(a) === norm(b);
+}
+
+// The directories whose .codex/config.toml Codex layers over the home config,
+// closest first: from the working directory up to the project root (the
+// nearest directory holding .git), or the working directory alone outside a
+// repository.
+function projectDirs(cwd) {
+  const dirs = [];
+  let dir = path.resolve(cwd);
+  for (;;) {
+    dirs.push(dir);
+    if (existsSync(path.join(dir, ".git"))) return dirs;
+    const up = path.dirname(dir);
+    if (up === dir) return [path.resolve(cwd)];
+    dir = up;
+  }
+}
+
+// The model_catalog_json Codex would use: null when none is configured, else
+// { file, models } or { file, error }. As Codex layers it, a -c override wins,
+// then a trusted project's .codex/config.toml (closest to the working
+// directory first), then CODEX_HOME/config.toml. Codex resolves a relative
+// path against the working directory for -c (the runner's, since it starts
+// Codex without changing directory, even with --cd), and against the
+// directory holding the config.toml otherwise. An untrusted project's config
+// is ignored, as Codex ignores it.
 function configuredCatalog(overrides, env, cwd) {
   const home = codexHome(env);
-  const fromOverride = catalogPathFromOverrides(overrides);
-  let named = fromOverride;
+  let named = catalogPathFromOverrides(overrides);
   let base = cwd;
   if (named == null) {
-    let configText = null;
-    try {
-      configText = readFileSync(path.join(home, "config.toml"), "utf8");
-    } catch {}
-    named = catalogPathFromToml(configText);
-    base = home;
+    const homeText = readText(path.join(home, "config.toml"));
+    const trusted = [...trustedProjectsFromToml(homeText)];
+    const dirs = projectDirs(cwd);
+    if (dirs.some((d) => trusted.some((t) => samePath(d, t)))) {
+      for (const dir of dirs) {
+        const codexDir = path.join(dir, ".codex");
+        if (samePath(codexDir, home)) continue;
+        named = catalogPathFromToml(readText(path.join(codexDir, "config.toml")));
+        if (named) {
+          base = codexDir;
+          break;
+        }
+      }
+    }
+    if (!named) {
+      named = catalogPathFromToml(homeText);
+      base = home;
+    }
   }
   if (!named) return null;
   const file = expandPath(named, base);

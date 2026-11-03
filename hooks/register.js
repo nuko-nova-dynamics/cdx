@@ -73,10 +73,13 @@ async function deliverMessage($, agentId, text) {
 
 // The runner's tier resolution as JSON, or null when it could not run. The
 // runner's catalog read times out on its own, so this cannot hang the start.
+// It runs in the session's directory, where Codex finds a project's
+// .codex/config.toml.
 async function resolveTiers($) {
   try {
     let stdout = "";
-    const stream = $.process.spawn({ argv: ["node", `${$.plugin.root}/scripts/codex-tiers.mjs`, "--json"] });
+    const cwd = await $.session.cwd();
+    const stream = $.process.spawn({ argv: ["node", `${$.plugin.root}/scripts/codex-tiers.mjs`, "--json"], cwd });
     for await (const piece of stream) if (piece.stream === "stdout") stdout += piece.text;
     return JSON.parse(stdout);
   } catch (err) {

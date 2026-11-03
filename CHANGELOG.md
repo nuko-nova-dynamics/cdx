@@ -14,6 +14,11 @@
   directory, as Codex resolves it; a relative path in `config.toml` still
   resolves against `CODEX_HOME`. A quoted Windows path in `-c` no longer
   throws.
+- A trusted project's `.codex/config.toml` catalog wins over the home one, as
+  in Codex, and an untrusted project's is ignored. Session-start tier
+  resolution runs in the session's directory so it sees that file. A
+  `model_catalog_json =` line inside a multi-line string, such as example
+  text in `developer_instructions`, is no longer read as the setting.
 
 ## 0.8.0 - 2026-11-03
 

@@ -89,6 +89,7 @@ test("model_catalog_json is read from config.toml's top level, with Windows path
   assert.equal(catalogPathFromToml("model_catalog_json = 'C:\\Users\\PC\\.codex\\proxy-model-catalog.json'\r\n"),
     "C:\\Users\\PC\\.codex\\proxy-model-catalog.json");
   assert.equal(catalogPathFromToml('model_catalog_json = "C:\\Users\\PC\\catalog.json"\n'), "C:\\Users\\PC\\catalog.json");
+  assert.equal(catalogPathFromToml('developer_instructions = """\nmodel_catalog_json = "example.json"\n[x]\n"""\nmodel = "m"\n'), null);
   assert.equal(catalogPathFromToml('[profiles.p]\nmodel_catalog_json = "p.json"\n'), null);
   assert.equal(catalogPathFromToml(null), null);
 });
@@ -148,6 +149,23 @@ test("a -c catalog resolves relative to the working directory, and a quoted Wind
   assert.equal(r.source, path.join(work, "here.json"));
   const win = loadCodexCatalog({ bin: FAKE, overrides: ['model_catalog_json="C:\\Users\\PC\\.codex\\missing.json"'], env, cwd: home });
   assert.match(win.error, /model_catalog_json file .*missing\.json could not be read/);
+});
+
+test("a trusted project's .codex/config.toml catalog wins over the home one; an untrusted project's is ignored", (t) => {
+  const { home, env } = mixedCatalogHome(t);
+  const repo = scratch(t);
+  mkdirSync(path.join(repo, ".git"));
+  mkdirSync(path.join(repo, ".codex"));
+  mkdirSync(path.join(repo, "sub"));
+  writeFileSync(path.join(repo, ".codex", "config.toml"), 'model_catalog_json = "project.json"\n');
+  writeFileSync(path.join(repo, ".codex", "project.json"), JSON.stringify({ models: [{ slug: "project/gpt-6-astra", priority: 1 }] }));
+  const cwd = path.join(repo, "sub");
+  assert.equal(loadCodexCatalog({ bin: FAKE, env, cwd }).source, path.join(home, "proxy-model-catalog.json"));
+  writeFileSync(path.join(home, "config.toml"),
+    `model_catalog_json = "proxy-model-catalog.json"\n[projects.${JSON.stringify(repo)}]\ntrust_level = "trusted"\n`);
+  const r = loadCodexCatalog({ bin: FAKE, env, cwd });
+  assert.equal(r.source, path.join(repo, ".codex", "project.json"));
+  assert.equal(resolveModel("astra", { env: {}, load: () => r }).model, "project/gpt-6-astra");
 });
 
 test("CDX_MODEL_<TIER> still wins over a configured catalog", (t) => {
