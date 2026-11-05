@@ -1,7 +1,7 @@
 {
   "name": "cdx",
-  "version": "0.8.2",
-  "description": "Delegate coding, Computer Use, and browser tasks from Claude Code to Codex, run Codex as Agent tool subagents, and give Claude Codex's computer use directly, with verified results, structured reviews, and session controls.",
+  "version": "0.8.3",
+  "description": "Delegate coding and desktop Computer Use from Claude Code to Codex, run Codex as Agent tool subagents, and give Claude direct native app control, including browser windows, with verified results, structured reviews, and session controls.",
   "author": {
     "name": "Nuko Nova Dynamics",
     "email": "hello@nukonova.com"
