@@ -2,24 +2,25 @@
 // cdx computer-use launcher: an MCP stdio server that gives Claude Codex's
 // computer use (the ChatGPT app's `cua_repl` server) as its own tools.
 //
-// It answers initialize and tools/list itself, and starts the real server only
-// on the first `js` or `js_reset` call, so sessions that never use computer use
-// run no extra process, and machines without the ChatGPT app see a tool error
-// instead of a startup failure. The real server's command, arguments, and
-// environment come from the newest unified-computer-use plugin config that the
-// ChatGPT app installs, read at spawn time so app updates keep working. These
-// are unofficial OpenAI internals and may change with any app update.
-import { spawn } from "node:child_process";
+// It answers initialize and tools/list itself, and starts Codex only on the
+// first `js` or `js_reset` call, so sessions that never use computer use run no
+// extra process, and machines without the ChatGPT app see a tool error instead
+// of a startup failure. The Computer Use service accepts a runtime only when
+// the ChatGPT app or Codex launched it, so cdx runs `codex app-server`, which
+// launches cua_repl from its plugin config, and calls the runtime's tools with
+// the app-server's mcpServer/tool/call. That runs no model turn. These are
+// unofficial OpenAI internals and may change with any app update.
+import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { appendFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { appendFileSync, chmodSync, existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { connect, createServer } from "node:net";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 import { approvalPolicyFromToml } from "../hooks/computer-use.js";
 
 const VERSION = JSON.parse(readFileSync(new URL("../.claude-plugin/plugin.json", import.meta.url), "utf8")).version;
 const SUPPORTED_PROTOCOLS = ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"];
-const INIT_ID = "cdx-cu-init";
 
 // Which agent made a call: set by the cdx mod's tool.call hook (the subagent's
 // id, or "main"), stripped before the call reaches the runtime.
@@ -121,7 +122,9 @@ function compareVersions(a, b) {
   return 0;
 }
 
-// The newest installed unified-computer-use config, or why there is none.
+// Whether Codex computer use is installed: the newest unified-computer-use
+// plugin config that the ChatGPT app installs, or why there is none. Codex
+// itself launches the runtime from this config.
 export function findServerConfig(home = codexHome()) {
   if (process.platform !== "darwin") return { error: "Codex computer use is only available on macOS." };
   const root = path.join(home, "plugins", "cache", "openai-bundled", "unified-computer-use");
@@ -145,34 +148,259 @@ export function findServerConfig(home = codexHome()) {
     return { error: `Could not read ${file}: ${err.message}` };
   }
   if (!server?.command) return { error: `${file} has no cua_repl server.` };
-  const launcher = withoutBrowserAccessGate(server.command, server.args ?? []);
-  if (!existsSync(launcher.command)) return { error: `The computer-use runtime is missing: ${launcher.command}` };
-  return { version, file, command: launcher.command, args: launcher.args, env: server.env ?? {} };
+  return { version, file };
 }
 
-// The access vars the app's browser service demands, which it passes only to
-// its own Codex sessions. Stripped from the child env so a stale or empty
-// value cannot trip the gate; see withoutBrowserAccessGate.
-export const BROWSER_ACCESS_ENV = [
-  "BROWSER_USE_ACCESS_EXECUTOR_ID",
+// The Codex CLI that hosts the runtime: CDX_CODEX_BIN, else the one bundled in
+// the ChatGPT app. The Computer Use service accepts a runtime only when the
+// ChatGPT app or Codex launched it, so cdx cannot launch the runtime itself.
+export function codexBinary(app = process.env.CDX_CHATGPT_APP || "/Applications/ChatGPT.app") {
+  if (process.env.CDX_CODEX_BIN) return process.env.CDX_CODEX_BIN;
+  const bundled = path.join(app, "Contents", "Resources", "codex-cli", "CodexCLI.app", "Contents", "MacOS", "codex");
+  return existsSync(bundled) ? bundled : null;
+}
+
+// Browser access codes: the ChatGPT app runs its own browser access host on a
+// private socket and signs a per-turn grant for it. The app hands the socket
+// path, the executor id, and the public key to sign with only to the Codex host
+// it starts for its own chats, so cdx reads them there and starts its host with
+// the same three variables. A host cdx starts without them fails browser calls
+// with "The browser access host is unavailable".
+const BROWSER_ACCESS_VARS = [
   "BROWSER_USE_ACCESS_PIPE_PATH",
+  "BROWSER_USE_ACCESS_EXECUTOR_ID",
   "BROWSER_USE_ACCESS_VERIFYING_IDENTITY",
 ];
+const isAppHost = (line) => line.includes("ChatGPT.app/Contents/Resources/codex-cli/") && / app-server( |$)/.test(line);
 
-// The app's 26.1029 config wraps node_repl in this shell command. Match the
-// full command so a later wrapper with additional setup stays intact.
-const ACCESS_WRAPPER = 'export BROWSER_USE_ACCESS_EXECUTOR_ID="${BROWSER_USE_ACCESS_EXECUTOR_ID-}"; exec "$@"';
-
-// Drop the known browser-access preload or wrapper from the runtime config.
-// This clears the host error seen outside Codex, but it does not establish
-// that a browser is connected to this session. Returns { command, args }.
-export function withoutBrowserAccessGate(command, args) {
-  if (/(?:^|\/)sh$/.test(String(command)) && args[0] === "-c" && args[1] === ACCESS_WRAPPER && args[2] === "cua-repl" && args.length >= 4) {
-    // ["-c", script, $0, realCommand, ...realArgs] -> unwrap, then recheck.
-    return withoutBrowserAccessGate(args[3], args.slice(4));
+// The app's Codex host process, or null when the app is not running.
+function appHostPid() {
+  if (process.platform !== "darwin") return null;
+  let lines;
+  try {
+    lines = execFileSync("ps", ["-Ao", "pid,ppid,command"], { encoding: "utf8" }).split("\n");
+  } catch {
+    return null;
   }
-  const gate = (arg) => String(arg).includes("require-browser-access");
-  return { command, args: args.filter((arg, i) => !gate(arg) && !(arg === "--import" && gate(args[i + 1]))) };
+  for (const line of lines) {
+    const [, ppid, ...rest] = line.trim().split(/\s+/);
+    if (isAppHost(rest.join(" ")) && lines.some((l) => l.trim().startsWith(`${ppid} `) && l.includes("ChatGPT.app/Contents/MacOS/ChatGPT"))) {
+      return line.trim().split(/\s+/)[0];
+    }
+  }
+  return null;
+}
+
+// The browser access host authorizes a caller only when the caller, its parent,
+// and its grandparent are each signed by OpenAI. The runtime's parent is the
+// Codex host, but that host's parent would be this launcher's Node, which is
+// signed by the Node.js Foundation, so a browser call is refused. The ChatGPT
+// app's bundled Node is OpenAI-signed and answers to "node", so the host is
+// started through it: runtime <- Codex <- bundled Node.
+export function hostNode(app = process.env.CDX_CHATGPT_APP || "/Applications/ChatGPT.app") {
+  const node = path.join(app, "Contents", "Resources", "cua_node", "bin", "node");
+  return existsSync(node) ? node : null;
+}
+
+// Runs the command it is given, stays its parent, and exits with it.
+const HOST_SHIM = `
+const { spawn } = require("node:child_process");
+const child = spawn(process.argv[1], process.argv.slice(2), { stdio: "inherit" });
+for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => child.kill(signal));
+child.on("exit", (code, signal) => process.exit(code ?? (signal ? 1 : 0)));
+`;
+
+// The bridge's socket: an app-spawned process relays browser access frames to
+// the app. See scripts/cdx-browser-bridge.mjs.
+export function bridgePointer() {
+  return path.join(tmpdir(), `cdx-browser-${process.getuid?.() ?? "u"}.json`);
+}
+
+// The live bridge socket, or null. The app kills and respawns MCP servers, so
+// the socket path is per process and the pointer file names the current one.
+async function liveBridge() {
+  try {
+    const { socket, executor } = JSON.parse(readFileSync(bridgePointer(), "utf8"));
+    if (socket && executor && (await bridgeReachable(socket))) return { socket, executor };
+  } catch {}
+  return null;
+}
+
+// The app starts MCP servers for a thread and stops the unused ones again, so
+// one bridge socket is not durable. cdx serves a stable socket of its own and
+// moves each request to whatever bridge is current, asking the app to load a
+// thread when none is left.
+let proxyPath = null;
+let lastTrigger = 0;
+
+// Loading a thread makes the app start its servers again. No turn runs.
+function triggerSpawn() {
+  const now = Date.now();
+  if (now - lastTrigger < 5000) return;
+  lastTrigger = now;
+  try {
+    const id = execFileSync("sqlite3", [path.join(codexHome(), "state_5.sqlite"), "select id from threads order by updated_at desc limit 1"], {
+      encoding: "utf8",
+    }).trim();
+    execFileSync("open", ["-g", `codex://threads/${id || "new"}`]);
+  } catch {}
+}
+
+async function waitBridge() {
+  for (let i = 0; i < 20; i += 1) {
+    const bridge = await liveBridge();
+    if (bridge) return bridge;
+    if (i === 2 || i === 10) triggerSpawn();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return null;
+}
+
+function splitFrames(onMessage) {
+  let buffer = Buffer.alloc(0);
+  return (chunk) => {
+    buffer = Buffer.concat([buffer, chunk]);
+    while (buffer.length >= 4) {
+      const length = buffer.readUInt32LE(0);
+      if (buffer.length < length + 4) return;
+      onMessage(buffer.subarray(0, length + 4));
+      buffer = buffer.subarray(length + 4);
+    }
+  };
+}
+
+function startBrowserProxy() {
+  proxyPath = path.join(tmpdir(), `cdx-browser-${process.getuid?.() ?? "u"}-${process.pid}.sock`);
+  try {
+    unlinkSync(proxyPath);
+  } catch {}
+  createServer((client) => {
+    const state = { upstream: null, last: null, closed: false, attaching: false };
+    // Keeps trying while the runtime is connected. The runtime opens one pipe
+    // for its life, so dropping the client ends browser use for that runtime.
+    const attach = async () => {
+      if (state.attaching || state.upstream || state.closed) return;
+      state.attaching = true;
+      try {
+        const bridge = await waitBridge();
+        if (!bridge || state.closed) return;
+        const upstream = connect(bridge.socket);
+        state.upstream = upstream;
+        upstream.on("data", (chunk) => client.write(chunk));
+        upstream.on("error", () => {});
+        upstream.on("close", () => {
+          if (state.upstream !== upstream) return;
+          state.upstream = null;
+          if (state.last && !state.closed) {
+            const frame = state.last;
+            setTimeout(() => {
+              void attach().then((ok) => ok && state.upstream?.write(frame));
+            }, 200);
+          }
+        });
+        await new Promise((resolve) => {
+          upstream.once("connect", resolve);
+          upstream.once("error", resolve);
+        });
+        return true;
+      } finally {
+        state.attaching = false;
+      }
+    };
+    client.on(
+      "data",
+      splitFrames((frame) => {
+        state.last = frame;
+        if (state.upstream?.writable) return state.upstream.write(frame);
+        void attach().then((ok) => ok && state.upstream?.write(frame));
+      }),
+    );
+    client.on("error", () => state.upstream?.destroy());
+    client.on("close", () => {
+      state.closed = true;
+      state.upstream?.destroy();
+    });
+    void attach();
+  }).listen(proxyPath, () => {
+    try {
+      chmodSync(proxyPath, 0o600);
+    } catch {}
+  });
+}
+
+function bridgeReachable(socket, timeoutMs = 300) {
+  return new Promise((resolve) => {
+    const socketClient = connect(socket);
+    const done = (ok) => {
+      socketClient.destroy();
+      resolve(ok);
+    };
+    socketClient.once("connect", () => done(true));
+    socketClient.once("error", () => done(false));
+    setTimeout(() => done(false), timeoutMs).unref();
+  });
+}
+
+// The app starts the bridge at launch from this config entry, which is the only
+// way to get a process under the app without opening a thread. The entry is
+// rewritten when the plugin path changes; the app picks it up on its next
+// launch.
+export function ensureBridgeConfig(home = codexHome()) {
+  const node = hostNode();
+  const script = new URL("./cdx-browser-bridge.mjs", import.meta.url).pathname;
+  if (!node || !existsSync(script)) return false;
+  const file = path.join(home, "config.toml");
+  let text;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch {
+    return false;
+  }
+  const block = [
+    "[mcp_servers.cdx_browser_bridge]",
+    `command = ${JSON.stringify(node)}`,
+    `args = [${JSON.stringify(script)}]`,
+    "enabled = true",
+    "required = true",
+    'startup_readiness = "connection"',
+    'tools = { browser_bridge_status = {} }',
+    "env_vars = [",
+    ...BROWSER_ACCESS_VARS.map((name) => `  { name = ${JSON.stringify(name)}, source = "local" },`),
+    "]",
+  ].join("\n");
+  const start = text.indexOf("[mcp_servers.cdx_browser_bridge]");
+  let next;
+  if (start === -1) {
+    next = `${text.trimEnd()}\n\n${block}\n`;
+  } else {
+    let end = text.indexOf("\n[", start + 1);
+    if (end === -1) end = text.length;
+    next = `${text.slice(0, start)}${block}${text.slice(end)}\n`;
+  }
+  if (next === text) return true;
+  try {
+    writeFileSync(file, next);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// The browser access variables the app gave that host, or {} when unavailable.
+export function browserAccessEnv(pid = appHostPid()) {
+  if (!pid) return {};
+  let env;
+  try {
+    env = execFileSync("ps", ["eww", "-p", pid, "-o", "command="], { encoding: "utf8" });
+  } catch {
+    return {};
+  }
+  const found = {};
+  for (const name of BROWSER_ACCESS_VARS) {
+    const match = env.match(new RegExp(`(?:^|\\s)${name}=(\\S+)`));
+    if (match) found[name] = match[1];
+  }
+  return BROWSER_ACCESS_VARS.every((name) => found[name]) ? found : {};
 }
 
 // Codex skips approval prompts when its top-level approval_policy is "never";
@@ -185,8 +413,9 @@ export function codexApprovalPolicy(home = codexHome()) {
   }
 }
 
+// An app approval from the runtime, as the Codex app-server relays it.
 export function isComputerUseApproval(msg) {
-  return msg?.method === "elicitation/create" && msg.params?._meta?.connector_id === "computer-use";
+  return msg?.method === "mcpServer/elicitation/request" && msg.params?._meta?.connector_id === "computer-use";
 }
 
 // The user's answer to an app approval, sent on to the runtime. Claude Code
@@ -235,50 +464,69 @@ export function turnEndedArguments(args, ids) {
   return { ...rest, session_id: agent === "main" ? ids.sessionId : agent, turn_id: ids.endTurn(agent) };
 }
 
-let clientInit = null; // the client's initialize params, replayed to the real server
-let child = null;
+let host = null; // { proc, threadId, request } once the Codex app-server is ready
 let starting = null;
-const forwarded = new Map(); // client request id -> method, for requests the real server owes
-const pendingApprovals = new Map(); // app approval id sent to the client -> the persist options it offered
+const pendingApprovals = new Map(); // approval id sent to the client -> { hostId, offered }
 const awaitingStart = new Set(); // ids of calls waiting for the runtime to start
 const cancelledDuringStart = new Set();
 
-function stopChild() {
-  if (child && child.exitCode === null) child.kill("SIGTERM");
+function stopHost() {
+  if (host && host.proc.exitCode === null) host.proc.kill("SIGTERM");
 }
 
-function startChild() {
+// Starts `codex app-server` and one ephemeral thread. Codex launches the
+// cua_repl runtime from its plugin config, and cdx calls the runtime's tools
+// with mcpServer/tool/call, which runs no model turn.
+function startHost() {
   if (starting) return starting;
-  const attempt = new Promise((resolve) => {
+  const attempt = new Promise(async (resolve) => {
     const config = findServerConfig();
-    if (config.error) {
-      resolve({ error: config.error });
-      return;
+    if (config.error) return resolve({ error: config.error });
+    const bin = codexBinary();
+    if (!bin) return resolve({ error: "No Codex CLI to host computer use: install the ChatGPT desktop app, or set CDX_CODEX_BIN." });
+    // With the bridge up, the runtime reaches the app through it; the app pipe
+    // itself refuses a runtime that cdx started.
+    const access = browserAccessEnv();
+    // The runtime's request must carry the account executor the app signs
+    // against, so the signed payload compares equal to the request.
+    const bridge = await waitBridge();
+    if (bridge && proxyPath) {
+      access.BROWSER_USE_ACCESS_PIPE_PATH = proxyPath;
+      access.BROWSER_USE_ACCESS_EXECUTOR_ID = bridge.executor;
     }
-    const env = { ...process.env, ...config.env };
-    for (const key of BROWSER_ACCESS_ENV) delete env[key];
-    const proc = spawn(config.command, config.args, {
-      env,
-      stdio: ["pipe", "pipe", "inherit"],
-    });
+    const options = { stdio: ["pipe", "pipe", "ignore"], env: { ...process.env, ...access } };
+    const node = hostNode();
+    const proc = node
+      ? spawn(node, ["-e", HOST_SHIM, "--", bin, "app-server"], options)
+      : spawn(bin, ["app-server"], options);
     const autoApprove = codexApprovalPolicy() === "never";
-    let ready = false;
+    const write = (msg) => proc.stdin.writable && proc.stdin.write(JSON.stringify(msg) + "\n");
+    let nextId = 0;
+    const waiting = new Map(); // host request id -> resolve
+    const request = (method, params) =>
+      new Promise((res) => {
+        const id = ++nextId;
+        waiting.set(id, res);
+        write({ id, method, params });
+      });
+    let settled = false;
     const fail = (message) => {
-      if (ready) return;
-      ready = true; // settle once
+      if (settled) return;
+      settled = true;
       if (proc.exitCode === null) proc.kill("SIGTERM");
       resolve({ error: message });
     };
-    const timer = setTimeout(() => fail("The computer-use runtime did not start within 120 seconds."), 120_000);
-    proc.on("error", (err) => fail(`Could not start the computer-use runtime: ${err.message}`));
+    const timer = setTimeout(() => fail("Codex did not start computer use within 120 seconds."), 120_000);
+    proc.on("error", (err) => fail(`Could not start Codex (${bin}): ${err.message}`));
     proc.on("exit", (code, signal) => {
       clearTimeout(timer);
-      fail(`The computer-use runtime exited during startup (${signal ?? `exit ${code}`}).`);
-      if (child === proc) child = null;
-      starting = null;
-      // Answer every call the runtime still owed, so Claude is never left waiting.
-      for (const [id] of forwarded) toolError(id, `The computer-use runtime stopped (${signal ?? `exit ${code}`}). Call js again to restart it.`);
-      forwarded.clear();
+      const why = signal ?? `exit ${code}`;
+      fail(`Codex exited while starting computer use (${why}).`);
+      if (host?.proc === proc) host = null;
+      if (starting === attempt) starting = null;
+      // Answer every call Codex still owed, so Claude is never left waiting.
+      for (const res of waiting.values()) res({ error: { message: `Codex stopped (${why}). Call js again to restart it.` } });
+      waiting.clear();
       pendingApprovals.clear();
     });
     readline.createInterface({ input: proc.stdout }).on("line", (line) => {
@@ -288,38 +536,39 @@ function startChild() {
       } catch {
         return;
       }
-      if (msg.id === INIT_ID && !ready) {
-        clearTimeout(timer);
-        if (msg.error) return fail(`The computer-use runtime refused to initialize: ${msg.error.message}`);
-        ready = true;
-        child = proc;
-        proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
-        resolve({ child: proc });
+      if (msg.method === undefined) {
+        waiting.get(msg.id)?.(msg);
+        waiting.delete(msg.id);
         return;
       }
-      if (msg.method === "notifications/tools/list_changed") return; // the listed tools are fixed here
-      if (autoApprove && isComputerUseApproval(msg)) {
+      if (msg.id === undefined) return; // notifications
+      if (isComputerUseApproval(msg) && autoApprove) {
         const app = msg.params?._meta?.tool_params?.app ?? "an app";
         process.stderr.write(`cdx computer-use: approved access to ${app} (Codex approval_policy is "never")\n`);
-        proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { action: "accept", content: {}, _meta: { persist: "session" } } }) + "\n");
+        write({ id: msg.id, result: { action: "accept", content: {}, _meta: { persist: "session" } } });
         return;
       }
-      if (isComputerUseApproval(msg) && msg.id !== undefined) pendingApprovals.set(msg.id, msg.params?._meta?.persist);
-      if (msg.id !== undefined && msg.method === undefined) forwarded.delete(msg.id);
-      send(msg);
+      if (msg.method === "mcpServer/elicitation/request") {
+        const { message, requestedSchema, _meta } = msg.params ?? {};
+        const clientId = `cdx-approval-${msg.id}`;
+        pendingApprovals.set(clientId, { hostId: msg.id, offered: isComputerUseApproval(msg) ? (_meta?.persist ?? null) : undefined, write });
+        send({ jsonrpc: "2.0", id: clientId, method: "elicitation/create", params: { message, requestedSchema: requestedSchema ?? { type: "object", properties: {} }, _meta } });
+        return;
+      }
+      write({ id: msg.id, error: { code: -32601, message: `cdx does not handle ${msg.method}` } });
     });
-    const init = clientInit ?? { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "cdx", version: VERSION } };
-    // With approval_policy=never, cdx answers computer-use app elicitations
-    // itself. The runtime still needs the form capability in initialize before
-    // it will issue those requests, even when Claude's client lacks it.
-    const runtimeInit = autoApprove ? {
-      ...init,
-      capabilities: {
-        ...init.capabilities,
-        elicitation: { ...init.capabilities?.elicitation, form: {} },
-      },
-    } : init;
-    proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: INIT_ID, method: "initialize", params: runtimeInit }) + "\n");
+    (async () => {
+      const init = await request("initialize", { clientInfo: { name: "cdx", version: VERSION }, capabilities: { experimentalApi: true } });
+      if (init.error) return fail(`Codex refused to initialize: ${init.error.message}`);
+      write({ method: "initialized" });
+      const thread = await request("thread/start", { ephemeral: true, cwd: process.cwd() });
+      const threadId = thread.result?.thread?.id;
+      if (!threadId) return fail(`Codex did not start a thread: ${thread.error?.message ?? JSON.stringify(thread.result)}`);
+      clearTimeout(timer);
+      settled = true;
+      host = { proc, threadId, request };
+      resolve({ host });
+    })();
   });
   starting = attempt;
   // A failed start is not kept: the next call tries again, so installing the
@@ -330,9 +579,16 @@ function startChild() {
   return attempt;
 }
 
+// Calls a cua_repl tool through Codex and answers the client's request.
+async function callTool(id, tool, args, meta) {
+  const res = await host.request("mcpServer/tool/call", { threadId: host.threadId, server: "cua_repl", tool, arguments: args, _meta: meta });
+  if (res.error) return toolError(id, res.error.message ?? "Codex could not call the computer-use runtime.");
+  reply(id, res.result);
+}
+
 async function forwardCall(msg) {
   awaitingStart.add(msg.id);
-  const started = child ? { child } : await startChild();
+  const started = host ? { host } : await startHost();
   awaitingStart.delete(msg.id);
   if (started.error) {
     if (cancelledDuringStart.delete(msg.id)) return;
@@ -340,25 +596,23 @@ async function forwardCall(msg) {
   }
   // Cancelled while the runtime was starting: never send it.
   if (cancelledDuringStart.delete(msg.id)) return;
-  forwarded.set(msg.id, msg.method);
-  started.child.stdin.write(JSON.stringify(withTurnMetadata(msg, { sessionId, turnOf })) + "\n");
+  const call = withTurnMetadata(msg, { sessionId, turnOf });
+  await callTool(msg.id, call.params.name, call.params.arguments, call.params._meta);
 }
 
 function handle(msg) {
-  // Responses from the client answer the real server's requests (elicitations).
+  // Responses from the client answer Codex's approval requests.
   if (msg.method === undefined) {
-    let answer = msg;
-    if (pendingApprovals.has(msg.id)) {
-      answer = withPersistedAccept(msg, pendingApprovals.get(msg.id));
-      pendingApprovals.delete(msg.id);
-    }
-    if (child) child.stdin.write(JSON.stringify(answer) + "\n");
+    const pending = pendingApprovals.get(msg.id);
+    if (!pending) return;
+    pendingApprovals.delete(msg.id);
+    const answer = pending.offered === undefined ? msg : withPersistedAccept(msg, pending.offered);
+    pending.write({ id: pending.hostId, result: answer.result ?? { action: "decline" } });
     return;
   }
   const isRequest = msg.id !== undefined;
   switch (msg.method) {
     case "initialize": {
-      clientInit = msg.params ?? null;
       const requested = msg.params?.protocolVersion;
       reply(msg.id, {
         protocolVersion: SUPPORTED_PROTOCOLS.includes(requested) ? requested : "2025-06-18",
@@ -384,9 +638,8 @@ function handle(msg) {
         };
         const args = turnEndedArguments(msg.params?.arguments, { sessionId, endTurn });
         // Nothing to clean up when the runtime never started.
-        if (!child) return reply(msg.id, { content: [], isError: false });
-        forwarded.set(msg.id, msg.method);
-        child.stdin.write(JSON.stringify({ ...msg, params: { ...msg.params, arguments: args } }) + "\n");
+        if (!host) return reply(msg.id, { content: [], isError: false });
+        void callTool(msg.id, "turn_ended", args, msg.params?._meta);
         return;
       }
       if (name === "js" || name === "js_reset") {
@@ -402,7 +655,6 @@ function handle(msg) {
           cancelledDuringStart.add(requestId);
           return;
         }
-        if (child && msg.method !== "notifications/initialized") child.stdin.write(JSON.stringify(msg) + "\n");
         return;
       }
       if (isRequest) replyError(msg.id, -32601, `Method not found: ${msg.method}`);
@@ -411,6 +663,8 @@ function handle(msg) {
 
 const isMain = import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith("codex-cu-mcp.mjs");
 if (isMain) {
+  ensureBridgeConfig();
+  startBrowserProxy();
   const input = readline.createInterface({ input: process.stdin });
   input.on("line", (line) => {
     let msg;
@@ -424,12 +678,12 @@ if (isMain) {
   });
   // The session closed the connection: stop the runtime with it.
   input.on("close", () => {
-    stopChild();
+    stopHost();
     setTimeout(() => process.exit(0), 200).unref();
   });
   for (const signal of ["SIGINT", "SIGTERM"]) {
     process.on(signal, () => {
-      stopChild();
+      stopHost();
       process.exit(0);
     });
   }
