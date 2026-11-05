@@ -45,9 +45,11 @@ asks for them or the failure points there.
    no unified-computer-use plugin) as the missing prerequisite. Report any
    entry in the result's `errors`. An empty browser list or browser access
    error does not prove that the desktop extension is disconnected. If the
-   requested browser appears under `apps`, bind it with `cua.getApp()`, verify
-   the native window and profile, and perform a read-only check there. Report
-   extension and DOM access as unavailable to this runtime. For "Sky Computer
+   requested browser is the ChatGPT extension in Brave, check the separate
+   `mcp__plugin_cdx_desktop-cua__desktop_js` relay with a read-only entry call.
+   It uses a desktop Codex turn and should show the Brave browser inventory.
+   Report extension access as unavailable to the direct runtime, not to cdx's
+   desktop relay. For "Sky Computer
    Use native pipe startup failed", retry a
    fresh read-only call before diagnosing it; if it persists, delegate the app
    task to Codex. Do not infer a permanent caller restriction from that error.

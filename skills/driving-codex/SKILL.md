@@ -17,8 +17,8 @@ For desktop apps, browser workflows, or visual verification, also read
 Codex handoff, the model and effort with a brief reason, and the Computer Use
 plugin and target app. Include those requirements in the prompt and verify
 actual tool use. The Codex CLI does not inherit the ChatGPT desktop browser
-extension or built-in browser; use cdx's direct native browser-app controls
-for browser tasks when the requested window and profile can be verified.
+extension or built-in browser; use cdx's app-hosted `desktop_js` relay for
+ChatGPT extension browser tasks.
 
 Before writing a non-trivial prompt for Codex, read
 [references/prompting.md](references/prompting.md).

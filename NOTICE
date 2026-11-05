@@ -5,3 +5,7 @@ The prompting reference files under skills/prompting-codex/references/
 are adapted from the "gpt-5-4-prompting" skill in openai/codex-plugin-cc
 (https://github.com/openai/codex-plugin-cc), licensed under the
 Apache License, Version 2.0.
+
+scripts/vendor/codex-relay/ contains codex_relay.py and its protocol reference
+from exgota/codex-relay at commit 718d0a7e1f9feb43cde16ab9634ca15fe6ed2d0d,
+Copyright (c) 2026 exgota, licensed under MIT. Its license is included there.
