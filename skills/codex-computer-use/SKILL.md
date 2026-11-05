@@ -6,9 +6,9 @@ description: Use when a task needs a desktop app or browser UI operated, a signe
 # Codex Computer Use and browsers
 
 For a desktop task, drive Computer Use directly through cdx or delegate to
-Codex. For a browser task from Claude Code, use cdx's native app controls when
-the requested browser window is available. The Codex CLI runner does not
-inherit browser access from the ChatGPT desktop app.
+Codex. For a browser task that needs the ChatGPT extension in Brave, use cdx's
+`desktop-cua` relay. It runs CUA in a ChatGPT desktop Codex turn. The direct
+Claude-launched runtime and the Codex CLI runner cannot see that extension.
 
 ## Choose who drives
 
@@ -42,19 +42,23 @@ These are unofficial OpenAI internals and can change with an app update.
 
 ### Browser windows
 
-The ChatGPT browser extension and built-in browser run in the desktop app's
-session. The cdx runtime can report an empty `browsers` list or a browser error
-while the desktop app has a connected extension. Do not tell the user to
-reconnect it based on cdx's inventory alone.
+Use `mcp__plugin_cdx_desktop-cua__desktop_js` for ChatGPT extension tabs in
+Brave. Its first call creates a visible Codex desktop chat and uses Codex
+allowance. Send exactly one CUA entry call, such as `await cua.getState();`;
+read the returned CUA documentation before further calls. Later calls use the
+same desktop chat and preserve JS bindings. `desktop_js_reset` clears them.
+cdx verifies that the desktop Codex turn invoked `cua_repl.js` with exactly
+the supplied code and returns that tool's recorded output. The relay is
+model-mediated, so report it as an app-hosted call, not direct Claude access.
 
-If the named browser appears under `apps`, bind its native window with
-`cua.getApp("Brave Browser")` (or the actual app name). Read the accessibility
-state and screenshot as needed, verify the requested window and profile, and
-use the native click and keyboard methods documented by the runtime. Read a
-fresh accessibility state after each action and derive new element indices.
-This controls the browser UI without extension tab handles or DOM methods. A
-live cdx check on 26.1029 selected a Brave tab and restored the original tab.
-If the window or profile cannot be verified, report that limit.
+The ChatGPT app's browser service grants access to its own desktop turns. A
+Claude-launched CUA runtime can show an empty `browsers` list or a pipe error
+while the app sees Brave. Do not strip access settings, reuse another process's
+grant, or tell the user to reconnect the extension because of that result.
+
+Use direct native app control (`cua.getApp("Brave Browser")`) only when the task
+needs the browser's own window UI, such as menus or dialogs outside the page.
+It has no extension tab handles or DOM.
 
 ### Troubleshooting
 
@@ -74,10 +78,9 @@ If the window or profile cannot be verified, report that limit.
   sessions, so restart it only when none of them is using computer use.
   Restart it for this message only, never for another error.
 - "The browser access host is unavailable" or "native pipe closed before
-  response" for the browser inventory means this runtime could not reach the
-  desktop browser service. Follow the native browser-app path above if the app
-  appears under `apps`. Do not strip browser access settings or infer that the
-  user's desktop extension is disconnected.
+  response" for the direct browser inventory means that separately launched
+  runtime could not reach the desktop browser service. Use `desktop_js` for
+  extension tabs. Do not infer that the extension is disconnected.
 - "Sky Computer Use native pipe startup failed" is a native-service failure.
   Retry a fresh read-only call before diagnosing it. The error alone does not
   prove that cdx is permanently blocked by the app build. If it persists,
@@ -91,8 +94,8 @@ If the window or profile cannot be verified, report that limit.
 
 Delegation uses Codex CLI and its available plugins; cdx does not install or
 enable them. Because the CLI cannot use the desktop app's built-in browser or
-browser extension, use cdx's native browser-app path above when a browser task
-stays in Claude Code.
+browser extension, use `desktop_js` when a browser task needs the ChatGPT
+extension from Claude Code.
 
 ### Announce the handoff
 

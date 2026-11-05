@@ -43,11 +43,11 @@ supported; use the marketplace matching your existing installation.
   schemas are selected per task while preserving your explicit choices.
 - **Structured output over prose relay.** Reviews and reports come back as
   JSON (`--output-schema`) that Claude parses, verifies, and acts on.
-- **Codex owns its state.** Sessions live in `~/.codex`; cdx keeps no job
-  registry, no state files, no companion daemon. One small runner script tames
-  the JSONL event stream; everything else is the CLI itself. The one
-  exception is the mod's record of which Codex session each Codex agent
-  owns, kept in Claude Code's mod store and dropped after 30 days unused.
+- **Codex owns its state.** Sessions live in `~/.codex`; cdx keeps no
+  companion daemon. The desktop browser relay keeps temporary records for its
+  visible Codex chat while its MCP server runs. The mod records which Codex
+  session each Codex agent owns in Claude Code's mod store and drops it after
+  30 days unused.
 
 ## Skills
 
@@ -145,22 +145,26 @@ also tells the runtime when each turn ends, as Codex does, so it can release
 browser tabs.
 
 The ChatGPT browser extension belongs to the desktop app's session. A cdx
-runtime launched from Claude Code can return an empty browser inventory or a
-browser access error even while the desktop app sees a connected browser. cdx
-now keeps the app's runtime command and access settings intact, so it reports
-that error instead of hiding it.
+runtime launched from Claude Code can return an empty browser inventory even
+while the desktop app sees Brave. For extension tabs, use the separate
+`mcp__plugin_cdx_desktop-cua__desktop_js` tool. It starts a visible Codex chat
+inside the current ChatGPT desktop app, passes Claude's JavaScript to that
+chat's `cua_repl.js`, checks that Codex called it with exactly the supplied
+code, and returns the recorded CUA tool result. Later calls continue the same
+desktop chat, so CUA JavaScript bindings persist. `desktop_js_reset` resets
+them. The first `desktop_js` call must be one CUA entry call, such as
+`await cua.getState();`.
 
-For direct browser work, use the browser as a native macOS app. If
-`cua.getState()` lists Brave Browser or Google Chrome under `apps`, call
-`cua.getApp()` with that app name, verify the window or profile from its
-accessibility state, and use the documented click, keyboard, and screenshot
-methods. A live 26.1029 check selected a Brave tab, read the changed state, and
-restored the original tab. This path does not provide extension tab handles or
-DOM access. An empty `browsers` list does not mean the desktop extension is
-disconnected.
+This relay uses Codex allowance and the app's local window socket. It is
+model-mediated, not a direct MCP connection from Claude Code to the browser
+service. The app may display the relay chat in the sidebar. On ChatGPT
+26.1029.61003, a live relay check found the connected Brave profile and bound
+an existing tab through `cua.getTab` without a browser pipe error. An app
+update may change the undocumented window protocol; cdx checks its method
+versions before each new desktop chat and stops on a mismatch.
 
-For example, ask Claude: "Use cdx Computer Use to inspect my open Brave window
-as a native app. Verify the window and profile, then read back the result."
+For browser window menus or dialogs outside a page, the direct `computer-use`
+tool can still use native macOS app control through `cua.getApp()`.
 
 Native app control uses the Sky computer-use service. With
 `approval_policy = "never"`, cdx now advertises MCP form elicitation to the
@@ -188,10 +192,8 @@ Claude names Codex and the requested plugin before launching. Codex checks its
 available tools and the target, completes the authorized task, and reads back
 the result. The report distinguishes actual plugin use from installed state.
 The cdx runner starts Codex CLI, which does not inherit the desktop app's
-browser extension or built-in browser. For browser tasks, use the direct native
-app path above. If the requested browser window or profile cannot be verified,
-report that blocker; a task requiring extension or DOM access belongs in the
-ChatGPT desktop app.
+browser extension or built-in browser. Use the app-hosted `desktop_js` relay
+above for Brave extension work from Claude Code.
 
 Computer Use must be available in the delegated Codex session with the
 required app permission. cdx does not install it. Plugin packaging and tool
