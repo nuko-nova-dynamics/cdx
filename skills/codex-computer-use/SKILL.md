@@ -5,22 +5,26 @@ description: Use when a task needs a desktop app or browser UI operated, a signe
 
 # Codex Computer Use and browsers
 
-There are two ways to run a desktop or browser task: drive Codex's computer
-use directly with cdx's `computer-use` tools, or delegate the task to Codex.
+Native apps run through cdx's `computer-use` server with no model turn.
+Browsers go through Codex.
 
-## Choose who drives
+## Choose the route
 
-- **Drive it directly** (the default when the user wants Claude to do it):
-  short UI tasks, checks, and steps inside a larger task Claude is running.
+- **Native app or window** (the default when the user wants Claude to do it):
+  drive it directly with `js`.
+- **Browser, browser profile, or a tab signed in to something**: delegate to
+  Codex; `js` cannot reach a browser on this version.
 - **Delegate to Codex** when the user names Codex, or for a long UI task whose
   screenshots and UI state would fill Claude's context. Follow
   `cdx:driving-codex` for the runner and the prompt.
 
-## Drive it directly
+## Drive a native app directly
 
 cdx's MCP server `computer-use` exposes the ChatGPT app's computer-use runtime
-(`cua_repl`) as `mcp__plugin_cdx_computer-use__js` and `js_reset`. It starts
-the runtime on the first `js` call and needs the ChatGPT desktop app with
+(`cua_repl`) as `mcp__plugin_cdx_computer-use__js` and `js_reset`. On the first
+`js` call it starts the ChatGPT app's `codex app-server`, which launches the
+runtime, because the Computer Use service accepts only a runtime that the
+ChatGPT app or Codex launched. Calls run no model turn. It needs the ChatGPT desktop app with
 Codex Computer Use installed; a missing app comes back as a tool error.
 These are unofficial OpenAI internals and can change with an app update.
 
@@ -52,18 +56,25 @@ These are unofficial OpenAI internals and can change with an app update.
   Then call `js_reset`. The service is shared with the ChatGPT app's Codex
   sessions, so restart it only when none of them is using computer use.
   Restart it for this message only, never for another error.
-- "The browser access host is unavailable" can mean the running cdx does not
-  handle this app build's launcher config. Update cdx and restart Claude Code.
-  Then check `cua.getState()` again. An empty browser list still means there is
-  no browser available to this session; delegate the browser task to Codex.
-- "Sky Computer Use native pipe startup failed" is a native-service failure.
-  Retry a fresh read-only call before diagnosing it. The error alone does not
-  prove that cdx is permanently blocked by the app build. If it persists,
-  delegate the app task to Codex and report the failure.
+- "The browser access host is unavailable" or an empty browser list on a `js`
+  call is expected: the direct runtime is not in the ChatGPT app's process
+  tree, and the app signs browser grants only for processes it started. Use
+  `desktop_js` for the browser work.
+- "Sky Computer Use native pipe startup failed" means the service refused the
+  runtime. cdx 0.8.2 and earlier launched the runtime directly, which the
+  service refuses since Codex Computer Use 26.1027; update cdx and restart
+  Claude Code. If it persists, delegate the app task to Codex and report it.
 - "nodeRepl.createElicitation is unavailable" on app access means the runtime
   did not receive MCP form elicitation. With `approval_policy = "never"`, cdx
   0.8.2 advertises that capability and answers the request. Otherwise the MCP
   client must support form elicitation so the user can approve the app.
+
+## Browsers
+
+A `js` browser call fails on this version with "The browser access host is
+unavailable" and an empty browser list: the app signs browser grants only for a
+process it started, and the app-server cdx starts is not one. Native apps still
+work. Delegate the browser task to Codex below.
 
 ## Delegate to Codex
 

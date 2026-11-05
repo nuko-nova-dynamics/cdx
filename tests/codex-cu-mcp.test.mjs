@@ -4,11 +4,11 @@ import { spawn } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { codexApprovalPolicy, findServerConfig, isComputerUseApproval, turnEndedArguments, withPersistedAccept, withTurnMetadata } from "../scripts/codex-cu-mcp.mjs";
+import { codexApprovalPolicy, codexBinary, findServerConfig, isComputerUseApproval, turnEndedArguments, withPersistedAccept, withTurnMetadata } from "../scripts/codex-cu-mcp.mjs";
 import { approvalPolicyFromToml } from "../hooks/computer-use.js";
 
 const LAUNCHER = new URL("../scripts/codex-cu-mcp.mjs", import.meta.url).pathname;
-const FAKE_RUNTIME = new URL("./fixtures/fake-cua-repl.mjs", import.meta.url).pathname;
+const FAKE_CODEX = new URL("./fixtures/fake-codex-app-server.mjs", import.meta.url).pathname;
 
 const darwin = process.platform === "darwin";
 
@@ -24,9 +24,10 @@ function codexHome(versions) {
   return home;
 }
 
-// Runs the launcher with CODEX_HOME=home and returns a minimal client.
-function launch(home) {
-  const proc = spawn(process.execPath, [LAUNCHER], { env: { ...process.env, CODEX_HOME: home }, stdio: ["pipe", "pipe", "ignore"] });
+// Runs the launcher with CODEX_HOME=home and the fake Codex app-server, and
+// returns a minimal client. Requests the launcher sends the client go to onRequest.
+function launch(home, env = {}, onRequest = () => {}) {
+  const proc = spawn(process.execPath, [LAUNCHER], { env: { ...process.env, CODEX_HOME: home, CDX_CODEX_BIN: FAKE_CODEX, ...env }, stdio: ["pipe", "pipe", "ignore"] });
   const waiting = new Map();
   let buf = "";
   proc.stdout.on("data", (d) => {
@@ -35,7 +36,8 @@ function launch(home) {
     while ((i = buf.indexOf("\n")) >= 0) {
       const m = JSON.parse(buf.slice(0, i));
       buf = buf.slice(i + 1);
-      waiting.get(m.id)?.(m);
+      if (m.method) onRequest(m);
+      else waiting.get(m.id)?.(m);
     }
   });
   const send = (m) => proc.stdin.write(JSON.stringify(m) + "\n");
@@ -47,46 +49,40 @@ function launch(home) {
   return { proc, send, call, close: () => proc.stdin.end() };
 }
 
-test("the newest installed plugin version supplies the command, args, and env", { skip: !darwin }, () => {
+test("the newest installed plugin version is the one found", { skip: !darwin }, () => {
   const home = codexHome({ "26.930.1": process.execPath, "26.1007.30912": process.execPath, "26.1007.4": process.execPath });
-  const config = findServerConfig(home);
-  assert.equal(config.version, "26.1007.30912");
-  assert.deepEqual(config.args, ["26.1007.30912.mjs"]);
-  assert.equal(config.env.BROWSER_USE_CODEX_APP_VERSION, "26.1007.30912");
+  assert.equal(findServerConfig(home).version, "26.1007.30912");
 });
 
-test("the browser access preload is left out of the args", { skip: !darwin }, () => {
-  const home = codexHome({});
-  installPlugin(home, "26.1023.50603", process.execPath, ["--import", "file:///x/require-browser-access.mjs", "/x/cua-repl.mjs"]);
-  assert.deepEqual(findServerConfig(home).args, ["/x/cua-repl.mjs"]);
-});
-
-test("the 26.1029 browser access shell wrapper is unwrapped to the real runtime", { skip: !darwin }, () => {
-  const home = codexHome({});
-  installPlugin(home, "26.1029.61003", "/bin/sh", [
-    "-c",
-    'export BROWSER_USE_ACCESS_EXECUTOR_ID="${BROWSER_USE_ACCESS_EXECUTOR_ID-}"; exec "$@"',
-    "cua-repl",
-    process.execPath,
-    "/x/cua-repl.mjs",
-  ]);
-  const config = findServerConfig(home);
-  assert.equal(config.command, process.execPath);
-  assert.deepEqual(config.args, ["/x/cua-repl.mjs"]);
-});
-
-test("an unfamiliar shell wrapper stays intact", { skip: !darwin }, () => {
-  const home = codexHome({});
-  const script = 'export BROWSER_USE_ACCESS_EXECUTOR_ID="${BROWSER_USE_ACCESS_EXECUTOR_ID-}"; export NEW_SETTING=1; exec "$@"';
-  installPlugin(home, "26.1030.1", "/bin/sh", ["-c", script, "cua-repl", process.execPath]);
-  const config = findServerConfig(home);
-  assert.equal(config.command, "/bin/sh");
-  assert.deepEqual(config.args, ["-c", script, "cua-repl", process.execPath]);
-});
-
-test("a missing plugin or runtime is an error to report, not a crash", { skip: !darwin }, () => {
+test("a missing plugin is an error to report, not a crash", { skip: !darwin }, () => {
   assert.match(findServerConfig(codexHome({})).error, /not installed/);
-  assert.match(findServerConfig(codexHome({ "1.0.0": "/nonexistent/node" })).error, /runtime is missing/);
+});
+
+test("CDX_CODEX_BIN names the Codex CLI; otherwise it is the ChatGPT app's bundled one", () => {
+  const saved = process.env.CDX_CODEX_BIN;
+  try {
+    process.env.CDX_CODEX_BIN = "/x/codex";
+    assert.equal(codexBinary(), "/x/codex");
+    delete process.env.CDX_CODEX_BIN;
+    assert.equal(codexBinary("/nonexistent/ChatGPT.app"), null);
+  } finally {
+    if (saved === undefined) delete process.env.CDX_CODEX_BIN;
+    else process.env.CDX_CODEX_BIN = saved;
+  }
+});
+
+test("calls reach cua_repl through Codex's mcpServer/tool/call on one thread", { skip: !darwin }, async () => {
+  const home = codexHome({ "1.0.0": process.execPath });
+  const client = launch(home);
+  try {
+    const first = JSON.parse((await client.call(1, "js", { code: "await cua.getState();" })).result.content[0].text);
+    const second = JSON.parse((await client.call(2, "js_reset", {})).result.content[0].text);
+    assert.deepEqual([first.server, first.tool, first.arguments], ["cua_repl", "js", { code: "await cua.getState();" }]);
+    assert.equal(second.tool, "js_reset");
+    assert.equal(first.threadId, second.threadId);
+  } finally {
+    client.close();
+  }
 });
 
 test("the approval policy is read from the top level of config.toml only", () => {
@@ -98,24 +94,41 @@ test("the approval policy is read from the top level of config.toml only", () =>
   assert.equal(codexApprovalPolicy(home), null);
 });
 
-test("approval_policy never lets the runtime request and receive app approval without client elicitation", { skip: !darwin }, async () => {
-  const home = codexHome({});
+test("approval_policy never approves the app without asking the client", { skip: !darwin }, async () => {
+  const home = codexHome({ "1.0.0": process.execPath });
   writeFileSync(path.join(home, "config.toml"), 'approval_policy = "never"\n');
-  installPlugin(home, "1.0.0", process.execPath, [FAKE_RUNTIME], { FAKE_REQUIRE_ELICITATION: "1" });
-  const client = launch(home);
+  let asked = false;
+  const client = launch(home, { FAKE_REQUIRE_ELICITATION: "1" }, () => (asked = true));
   try {
     const response = await client.call(1, "js", { code: "await cua.getApp('Calculator')" });
     assert.equal(response.result?.isError, false, JSON.stringify(response));
-    assert.equal(response.result.content[0].text, "accept");
+    assert.equal(JSON.parse(response.result.content[0].text).action, "accept");
+    assert.equal(asked, false);
+  } finally {
+    client.close();
+  }
+});
+
+test("otherwise the client is asked, and its accept reaches Codex as a persisted approval", { skip: !darwin }, async () => {
+  const home = codexHome({ "1.0.0": process.execPath });
+  let client;
+  client = launch(home, { FAKE_REQUIRE_ELICITATION: "1" }, (req) => {
+    assert.equal(req.method, "elicitation/create");
+    assert.equal(req.params.message, "Allow Calculator?");
+    client.send({ jsonrpc: "2.0", id: req.id, result: { action: "accept", content: {} } });
+  });
+  try {
+    const response = await client.call(1, "js", { code: "await cua.getApp('Calculator')" });
+    assert.deepEqual(JSON.parse(response.result.content[0].text), { action: "accept", content: {}, _meta: { persist: "session" } });
   } finally {
     client.close();
   }
 });
 
 test("only computer-use elicitations count as app approvals", () => {
-  const approval = { method: "elicitation/create", params: { _meta: { connector_id: "computer-use" } } };
+  const approval = { method: "mcpServer/elicitation/request", params: { _meta: { connector_id: "computer-use" } } };
   assert.equal(isComputerUseApproval(approval), true);
-  assert.equal(isComputerUseApproval({ method: "elicitation/create", params: { _meta: { connector_id: "browser" } } }), false);
+  assert.equal(isComputerUseApproval({ method: "mcpServer/elicitation/request", params: { _meta: { connector_id: "browser" } } }), false);
   assert.equal(isComputerUseApproval({ method: "tools/call" }), false);
 });
 
@@ -171,7 +184,7 @@ test("a failed start is not cached: the next call starts the runtime once it is 
     const first = await client.call(1, "js", { code: "1" });
     assert.equal(first.result.isError, true);
     assert.match(first.result.content[0].text, /not installed/);
-    installPlugin(home, "1.0.0", process.execPath, [FAKE_RUNTIME], {});
+    installPlugin(home, "1.0.0", process.execPath);
     const second = await client.call(2, "js", { code: "2" });
     assert.notEqual(second.result.isError, true, JSON.stringify(second));
   } finally {
@@ -182,8 +195,8 @@ test("a failed start is not cached: the next call starts the runtime once it is 
 test("a call cancelled while the runtime starts never reaches it", { skip: !darwin }, async () => {
   const home = mkdtempSync(path.join(tmpdir(), "cdx-cu-cancel-"));
   const log = path.join(home, "calls.log");
-  installPlugin(home, "1.0.0", process.execPath, [FAKE_RUNTIME], { FAKE_CUA_LOG: log });
-  const client = launch(home);
+  installPlugin(home, "1.0.0", process.execPath);
+  const client = launch(home, { FAKE_CUA_LOG: log });
   try {
     let cancelledAnswered = false;
     client.call(5, "js", { code: "cancelled" }).then(() => (cancelledAnswered = true));

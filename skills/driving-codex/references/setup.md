@@ -43,11 +43,10 @@ asks for them or the failure points there.
    `mcp__plugin_cdx_computer-use__js` is available, and with a live smoke test call it
    once with `await cua.getState();`. Report a tool error (no ChatGPT app or
    no unified-computer-use plugin) as the missing prerequisite. Report any
-   entry in the result's `errors`. For "The browser access host is
-   unavailable", update cdx and retry. An empty browser list is not a passed
-   browser check. For "Sky Computer Use native pipe startup failed", retry a
-   fresh read-only call before diagnosing it; if it persists, delegate the app
-   task to Codex. Do not infer a permanent caller restriction from that error.
+   entry in the result's `errors`. "The browser access host is unavailable" or
+   an empty browser list means `js` has no browser on this version; check the
+   browser through Codex instead. "Sky Computer Use native pipe startup failed"
+   means the service refused the runtime; update cdx first.
 
 Report CLI version, authentication, runner compatibility, and whether a
 live smoke test passed, failed, or was not run. Keep the report compact.

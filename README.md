@@ -72,8 +72,8 @@ request matches, so you ask in plain language; you can also type
     compatibility, a live smoke test, and Computer Use or browser plugins.
   - `model-routing.md` (dated benchmark, cost, and community evidence) and
     `flag-map.md` (stamped with the verified CLI version).
-- **codex-computer-use**: desktop app and browser work. When Claude drives
-  computer use itself and when it delegates to Codex; explicit plugin
+- **codex-computer-use**: desktop app and browser work. Driving native apps
+  directly, the app-hosted browser relay, and delegation to Codex; explicit plugin
   handoffs, browser/profile selection, live capability checks, app and page
   verification, and shared UI coordination.
 
@@ -123,17 +123,20 @@ prompts. Mods need Claude Code CLI 2.1.287 or later and do not load under
 
 cdx also gives Claude Codex's computer use directly. Its `computer-use` MCP
 server exposes the ChatGPT desktop app's computer-use runtime (`cua_repl`) as
-`mcp__plugin_cdx_computer-use__js`, so Claude can operate Mac apps and browsers
-itself:
+`mcp__plugin_cdx_computer-use__js`, so Claude can operate Mac apps itself:
 
 ```text
 Open Calculator and work out 12 × 12.
 ```
 
-The server starts the runtime on the first call and finds the newest installed
-version, so ChatGPT updates keep working. It needs macOS and the ChatGPT app
-with Codex Computer Use; without them the tool returns an error and nothing
-else changes. While in use, the runtime's processes take several hundred MB
+The Computer Use service accepts a runtime only when the ChatGPT app or Codex
+launched it. On the first call the server starts the ChatGPT app's bundled
+`codex app-server`, which launches the runtime from its newest installed
+config, and cdx calls the runtime's tools through the app-server's
+`mcpServer/tool/call`. That runs no model turn and uses no Codex allowance.
+Set `CDX_CODEX_BIN` to use another Codex CLI. It needs macOS and the ChatGPT
+app with Codex Computer Use; without them the tool returns an error and
+nothing else changes. While in use, the runtime's processes take several hundred MB
 (about 690 MB RSS measured with the 26.1007 app) and exit with the session.
 
 Approvals follow your Codex `approval_policy`. With `"never"`, app-access
@@ -144,19 +147,17 @@ about that app again, in Claude Code or in Codex. The cdx mod
 also tells the runtime when each turn ends, as Codex does, so it can release
 browser tabs.
 
-Browsers use the ChatGPT Chrome and Brave extensions. The launcher handles the
-browser-access preload in app build 26.1023 and the shell wrapper in 26.1029.
-This clears the "The browser access host is unavailable" error, but a browser
-must still appear in `cua.getState()` before cdx can use it. If the list is
-empty, delegate the browser task to Codex.
+Browsers are not available on this version yet. Before a browser call the
+runtime asks the ChatGPT app for a signed grant, and the app signs only for a
+process it started. The app-server cdx starts is not one, so a `js` browser call
+comes back with "The browser access host is unavailable" and an empty browser
+list, and native apps still work. Delegate a browser task to Codex, or use the
+`browser-access-bridge` branch.
 
 Native app control uses the Sky computer-use service. With
-`approval_policy = "never"`, cdx now advertises MCP form elicitation to the
-runtime and answers app-access requests itself, even if Claude Code does not
-advertise that capability. A live 26.1029 check opened Calculator through cdx
-without a client elicitation capability. If "Sky Computer Use native pipe
-startup failed" recurs, check a fresh call; that error alone does not establish
-a permanent caller restriction.
+`approval_policy = "never"`, cdx answers app-access requests itself; otherwise
+Claude Code asks you. A live 26.1029 check through `codex app-server` listed the
+installed apps and read Calculator's window.
 
 This uses unofficial OpenAI internals, not a published API. An update to the
 ChatGPT app can change or break it. Set `CDX_CU_TRACE=<file>` to log the MCP
