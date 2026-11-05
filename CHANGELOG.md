@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.2 - 2026-11-04
+
+- Handle the ChatGPT 26.1029 computer-use shell wrapper and remove the browser
+  access host error it caused. A connected browser is still required; an empty
+  browser inventory does not count as working browser control.
+- When `approval_policy = "never"`, advertise MCP form elicitation to the
+  runtime so cdx can answer app-access requests even when Claude Code does not
+  advertise it. A live check opened Calculator through cdx on 26.1029.
+- Correct the troubleshooting guidance for native-pipe failures. A fresh local
+  check succeeded, so the earlier error does not prove a permanent restriction
+  on cdx-launched runtimes.
+
 ## 0.8.1 - 2026-11-03
 
 - When `config.toml` (or a `-c` override) sets `model_catalog_json`, tiers

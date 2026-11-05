@@ -144,11 +144,19 @@ about that app again, in Claude Code or in Codex. The cdx mod
 also tells the runtime when each turn ends, as Codex does, so it can release
 browser tabs.
 
-Browsers are reached through the ChatGPT Chrome and Brave extensions. Since
-the 26.1023 app, the runtime's config preloads `require-browser-access.mjs`,
-which asks for an access pipe that the app gives only to its own Codex
-sessions; the launcher leaves that preload out, or every browser call would
-fail with "The browser access host is unavailable".
+Browsers use the ChatGPT Chrome and Brave extensions. The launcher handles the
+browser-access preload in app build 26.1023 and the shell wrapper in 26.1029.
+This clears the "The browser access host is unavailable" error, but a browser
+must still appear in `cua.getState()` before cdx can use it. If the list is
+empty, delegate the browser task to Codex.
+
+Native app control uses the Sky computer-use service. With
+`approval_policy = "never"`, cdx now advertises MCP form elicitation to the
+runtime and answers app-access requests itself, even if Claude Code does not
+advertise that capability. A live 26.1029 check opened Calculator through cdx
+without a client elicitation capability. If "Sky Computer Use native pipe
+startup failed" recurs, check a fresh call; that error alone does not establish
+a permanent caller restriction.
 
 This uses unofficial OpenAI internals, not a published API. An update to the
 ChatGPT app can change or break it. Set `CDX_CU_TRACE=<file>` to log the MCP
