@@ -61,6 +61,29 @@ test("the browser access preload is left out of the args", { skip: !darwin }, ()
   assert.deepEqual(findServerConfig(home).args, ["/x/cua-repl.mjs"]);
 });
 
+test("the 26.1029 browser access shell wrapper is unwrapped to the real runtime", { skip: !darwin }, () => {
+  const home = codexHome({});
+  installPlugin(home, "26.1029.61003", "/bin/sh", [
+    "-c",
+    'export BROWSER_USE_ACCESS_EXECUTOR_ID="${BROWSER_USE_ACCESS_EXECUTOR_ID-}"; exec "$@"',
+    "cua-repl",
+    process.execPath,
+    "/x/cua-repl.mjs",
+  ]);
+  const config = findServerConfig(home);
+  assert.equal(config.command, process.execPath);
+  assert.deepEqual(config.args, ["/x/cua-repl.mjs"]);
+});
+
+test("an unfamiliar shell wrapper stays intact", { skip: !darwin }, () => {
+  const home = codexHome({});
+  const script = 'export BROWSER_USE_ACCESS_EXECUTOR_ID="${BROWSER_USE_ACCESS_EXECUTOR_ID-}"; export NEW_SETTING=1; exec "$@"';
+  installPlugin(home, "26.1030.1", "/bin/sh", ["-c", script, "cua-repl", process.execPath]);
+  const config = findServerConfig(home);
+  assert.equal(config.command, "/bin/sh");
+  assert.deepEqual(config.args, ["-c", script, "cua-repl", process.execPath]);
+});
+
 test("a missing plugin or runtime is an error to report, not a crash", { skip: !darwin }, () => {
   assert.match(findServerConfig(codexHome({})).error, /not installed/);
   assert.match(findServerConfig(codexHome({ "1.0.0": "/nonexistent/node" })).error, /runtime is missing/);
@@ -73,6 +96,20 @@ test("the approval policy is read from the top level of config.toml only", () =>
   assert.equal(codexApprovalPolicy(home), "never");
   writeFileSync(path.join(home, "config.toml"), '[profiles.a]\napproval_policy = "never"\n');
   assert.equal(codexApprovalPolicy(home), null);
+});
+
+test("approval_policy never lets the runtime request and receive app approval without client elicitation", { skip: !darwin }, async () => {
+  const home = codexHome({});
+  writeFileSync(path.join(home, "config.toml"), 'approval_policy = "never"\n');
+  installPlugin(home, "1.0.0", process.execPath, [FAKE_RUNTIME], { FAKE_REQUIRE_ELICITATION: "1" });
+  const client = launch(home);
+  try {
+    const response = await client.call(1, "js", { code: "await cua.getApp('Calculator')" });
+    assert.equal(response.result?.isError, false, JSON.stringify(response));
+    assert.equal(response.result.content[0].text, "accept");
+  } finally {
+    client.close();
+  }
 });
 
 test("only computer-use elicitations count as app approvals", () => {

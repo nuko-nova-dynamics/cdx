@@ -145,18 +145,34 @@ export function findServerConfig(home = codexHome()) {
     return { error: `Could not read ${file}: ${err.message}` };
   }
   if (!server?.command) return { error: `${file} has no cua_repl server.` };
-  if (!existsSync(server.command)) return { error: `The computer-use runtime is missing: ${server.command}` };
-  return { version, file, command: server.command, args: withoutBrowserAccessGate(server.args ?? []), env: server.env ?? {} };
+  const launcher = withoutBrowserAccessGate(server.command, server.args ?? []);
+  if (!existsSync(launcher.command)) return { error: `The computer-use runtime is missing: ${launcher.command}` };
+  return { version, file, command: launcher.command, args: launcher.args, env: server.env ?? {} };
 }
 
-// Since 26.1023 the config preloads require-browser-access.mjs, which sets
-// BROWSER_USE_ACCESS_EXECUTOR_ID and so makes the browser service demand the
-// access pipe and identity that the ChatGPT app passes only to its own Codex
-// sessions. Without them every browser call fails with "The browser access
-// host is unavailable"; without the preload the browsers list as before.
-function withoutBrowserAccessGate(args) {
+// The access vars the app's browser service demands, which it passes only to
+// its own Codex sessions. Stripped from the child env so a stale or empty
+// value cannot trip the gate; see withoutBrowserAccessGate.
+export const BROWSER_ACCESS_ENV = [
+  "BROWSER_USE_ACCESS_EXECUTOR_ID",
+  "BROWSER_USE_ACCESS_PIPE_PATH",
+  "BROWSER_USE_ACCESS_VERIFYING_IDENTITY",
+];
+
+// The app's 26.1029 config wraps node_repl in this shell command. Match the
+// full command so a later wrapper with additional setup stays intact.
+const ACCESS_WRAPPER = 'export BROWSER_USE_ACCESS_EXECUTOR_ID="${BROWSER_USE_ACCESS_EXECUTOR_ID-}"; exec "$@"';
+
+// Drop the known browser-access preload or wrapper from the runtime config.
+// This clears the host error seen outside Codex, but it does not establish
+// that a browser is connected to this session. Returns { command, args }.
+export function withoutBrowserAccessGate(command, args) {
+  if (/(?:^|\/)sh$/.test(String(command)) && args[0] === "-c" && args[1] === ACCESS_WRAPPER && args[2] === "cua-repl" && args.length >= 4) {
+    // ["-c", script, $0, realCommand, ...realArgs] -> unwrap, then recheck.
+    return withoutBrowserAccessGate(args[3], args.slice(4));
+  }
   const gate = (arg) => String(arg).includes("require-browser-access");
-  return args.filter((arg, i) => !gate(arg) && !(arg === "--import" && gate(args[i + 1])));
+  return { command, args: args.filter((arg, i) => !gate(arg) && !(arg === "--import" && gate(args[i + 1]))) };
 }
 
 // Codex skips approval prompts when its top-level approval_policy is "never";
@@ -239,8 +255,10 @@ function startChild() {
       resolve({ error: config.error });
       return;
     }
+    const env = { ...process.env, ...config.env };
+    for (const key of BROWSER_ACCESS_ENV) delete env[key];
     const proc = spawn(config.command, config.args, {
-      env: { ...process.env, ...config.env },
+      env,
       stdio: ["pipe", "pipe", "inherit"],
     });
     const autoApprove = codexApprovalPolicy() === "never";
@@ -291,7 +309,17 @@ function startChild() {
       send(msg);
     });
     const init = clientInit ?? { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "cdx", version: VERSION } };
-    proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: INIT_ID, method: "initialize", params: init }) + "\n");
+    // With approval_policy=never, cdx answers computer-use app elicitations
+    // itself. The runtime still needs the form capability in initialize before
+    // it will issue those requests, even when Claude's client lacks it.
+    const runtimeInit = autoApprove ? {
+      ...init,
+      capabilities: {
+        ...init.capabilities,
+        elicitation: { ...init.capabilities?.elicitation, form: {} },
+      },
+    } : init;
+    proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: INIT_ID, method: "initialize", params: runtimeInit }) + "\n");
   });
   starting = attempt;
   // A failed start is not kept: the next call tries again, so installing the

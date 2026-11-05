@@ -52,9 +52,18 @@ These are unofficial OpenAI internals and can change with an app update.
   Then call `js_reset`. The service is shared with the ChatGPT app's Codex
   sessions, so restart it only when none of them is using computer use.
   Restart it for this message only, never for another error.
-- "The browser access host is unavailable" means the session runs cdx older
-  than 0.7.4. Restarting the service does not fix it; update cdx and restart
-  Claude Code.
+- "The browser access host is unavailable" can mean the running cdx does not
+  handle this app build's launcher config. Update cdx and restart Claude Code.
+  Then check `cua.getState()` again. An empty browser list still means there is
+  no browser available to this session; delegate the browser task to Codex.
+- "Sky Computer Use native pipe startup failed" is a native-service failure.
+  Retry a fresh read-only call before diagnosing it. The error alone does not
+  prove that cdx is permanently blocked by the app build. If it persists,
+  delegate the app task to Codex and report the failure.
+- "nodeRepl.createElicitation is unavailable" on app access means the runtime
+  did not receive MCP form elicitation. With `approval_policy = "never"`, cdx
+  0.8.2 advertises that capability and answers the request. Otherwise the MCP
+  client must support form elicitation so the user can approve the app.
 
 ## Delegate to Codex
 

@@ -43,8 +43,11 @@ asks for them or the failure points there.
    `mcp__plugin_cdx_computer-use__js` is available, and with a live smoke test call it
    once with `await cua.getState();`. Report a tool error (no ChatGPT app or
    no unified-computer-use plugin) as the missing prerequisite. Report any
-   entry in the result's `errors`; "The browser access host is unavailable"
-   means the session runs cdx older than 0.7.4.
+   entry in the result's `errors`. For "The browser access host is
+   unavailable", update cdx and retry. An empty browser list is not a passed
+   browser check. For "Sky Computer Use native pipe startup failed", retry a
+   fresh read-only call before diagnosing it; if it persists, delegate the app
+   task to Codex. Do not infer a permanent caller restriction from that error.
 
 Report CLI version, authentication, runner compatibility, and whether a
 live smoke test passed, failed, or was not run. Keep the report compact.
