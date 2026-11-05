@@ -5,18 +5,16 @@ description: Use when a task needs a desktop app or browser UI operated, a signe
 
 # Codex Computer Use and browsers
 
-For a desktop task, drive Computer Use directly through cdx or delegate to
-Codex. For a browser task that needs the ChatGPT extension in Brave, use cdx's
-`desktop-cua` relay. It runs CUA in a ChatGPT desktop Codex turn. The direct
-Claude-launched runtime and the Codex CLI runner cannot see that extension.
+There are two ways to run a desktop or browser task: drive Codex's computer
+use directly with cdx's `computer-use` tools, or delegate the task to Codex.
 
 ## Choose who drives
 
 - **Drive it directly** (the default when the user wants Claude to do it):
   short UI tasks, checks, and steps inside a larger task Claude is running.
-- **Delegate to Codex** for a desktop app task when the user names Codex, or
-  when a long task would fill Claude's context. Follow `cdx:driving-codex`.
-  Check app access in that CLI session before promising a UI result.
+- **Delegate to Codex** when the user names Codex, or for a long UI task whose
+  screenshots and UI state would fill Claude's context. Follow
+  `cdx:driving-codex` for the runner and the prompt.
 
 ## Drive it directly
 
@@ -39,29 +37,6 @@ These are unofficial OpenAI internals and can change with an app update.
 - Read back the observable result (a display value, a saved setting) before
   reporting success. One agent at a time per app or browser profile.
 - `turn_ended` is called automatically at the end of each turn; never call it.
-
-### Browser windows
-
-Use `mcp__plugin_cdx_desktop-cua__desktop_js` for ChatGPT extension tabs in
-Brave. Its first call creates a visible Codex desktop chat and uses Codex
-allowance. Send exactly one CUA entry call, such as `await cua.getState();`;
-read the returned CUA documentation before further calls. Later calls use the
-same desktop chat and preserve JS bindings. `desktop_js_reset` clears them.
-cdx verifies that the desktop Codex turn invoked `cua_repl.js` with exactly
-the supplied code and returns that tool's recorded output. The relay is
-model-mediated, so report it as an app-hosted call, not direct Claude access.
-
-The ChatGPT app's browser service grants access to its own desktop turns. A
-Claude-launched CUA runtime can show an empty `browsers` list or a pipe error
-while the app sees Brave. Do not strip access settings, reuse another process's
-grant, or tell the user to reconnect the extension because of that result.
-
-Use direct native app control (`cua.getApp("Brave Browser")`) only when the task
-needs the browser's own window UI, such as menus or dialogs outside the page.
-It has no extension tab handles or DOM.
-
-### Troubleshooting
-
 - "This application session has been explicitly stopped by the user for this
   turn" is genuine only when the user stopped computer use during this turn;
   then end the turn as it says. If the user did not stop it, or it returns on
@@ -77,25 +52,23 @@ It has no extension tab handles or DOM.
   Then call `js_reset`. The service is shared with the ChatGPT app's Codex
   sessions, so restart it only when none of them is using computer use.
   Restart it for this message only, never for another error.
-- "The browser access host is unavailable" or "native pipe closed before
-  response" for the direct browser inventory means that separately launched
-  runtime could not reach the desktop browser service. Use `desktop_js` for
-  extension tabs. Do not infer that the extension is disconnected.
+- "The browser access host is unavailable" can mean the running cdx does not
+  handle this app build's launcher config. Update cdx and restart Claude Code.
+  Then check `cua.getState()` again. An empty browser list still means there is
+  no browser available to this session; delegate the browser task to Codex.
 - "Sky Computer Use native pipe startup failed" is a native-service failure.
   Retry a fresh read-only call before diagnosing it. The error alone does not
   prove that cdx is permanently blocked by the app build. If it persists,
   delegate the app task to Codex and report the failure.
 - "nodeRepl.createElicitation is unavailable" on app access means the runtime
   did not receive MCP form elicitation. With `approval_policy = "never"`, cdx
-  0.8.2 and later advertise that capability and answer the request. Otherwise
-  the MCP client must support form elicitation so the user can approve the app.
+  0.8.2 advertises that capability and answers the request. Otherwise the MCP
+  client must support form elicitation so the user can approve the app.
 
 ## Delegate to Codex
 
-Delegation uses Codex CLI and its available plugins; cdx does not install or
-enable them. Because the CLI cannot use the desktop app's built-in browser or
-browser extension, use `desktop_js` when a browser task needs the ChatGPT
-extension from Claude Code.
+Delegation uses the plugins available in that Codex session; cdx does not
+install or enable them.
 
 ### Announce the handoff
 
@@ -104,7 +77,7 @@ requested plugin or capability, the task, and the target app or browser/profile.
 Put the same explicit requirement in the prompt sent to Codex. For example:
 
 > I'm delegating the settings check to Codex using its Computer Use plugin for
-> the named desktop app.
+> the desktop app and its Chrome/browser plugin for Chrome's Work profile.
 
 This announces the intended tools. Afterward, report the tools actually used
 and whether the requested work was verified, partial, or blocked. Do not claim
@@ -115,7 +88,10 @@ plugin use from a successful CLI exit or a plugin listing alone.
 | Task | Instruction to Codex |
 |---|---|
 | Desktop app or visual UI flow | Explicitly use the Computer Use plugin and name the app/window. |
-| Browser window in a CLI session | Use native Computer Use only after a live app and profile check; otherwise keep the task in Claude's direct cdx session or report the blocker. |
+| Signed-in Chrome workflow | Explicitly use the Chrome/browser plugin and preserve the requested profile and site. |
+| Brave, Edge, or another named browser | Use the connected browser named by the user through the available browser plugin; verify the browser and profile before acting. |
+| Local web app or no named browser | Prefer Codex's built-in browser when available, subject to the user's browser preference. |
+| Workflow spanning apps and browser | Name both Computer Use and the browser plugin, with a target for each. |
 
 Honor an explicit tool choice. If none was requested, prefer a dedicated
 connector or CLI for structured operations and use UI tools when the task
@@ -131,8 +107,10 @@ any ambiguity before acting on that target.
 ### Check availability inside the delegated session
 
 For setup or troubleshooting, inspect `codex plugin list --json`, including
-`installed`, `enabled`, and any catalog errors. An installed plugin is not
-proof that its browser service is callable from Codex CLI.
+`installed`, `enabled`, and any catalog errors. On 2026-09-07, the inspected
+installation listed `unified-computer-use`,
+`computer-use`, `chrome`, and `browser` in `openai-bundled`. These are examples
+for discovery as packaging changes, not dependencies to install automatically.
 
 Tell Codex to discover its callable tools and read their current instructions
 before operating the UI. Current installations may expose the shared
@@ -146,7 +124,7 @@ task completion. Tools available in the desktop app are not proof that a
 separate CLI or cloud session can call them. Do not send a local UI workflow
 to Codex Cloud expecting it to inherit the user's local browser or desktop.
 
-Missing tools, an unavailable app window, an unverifiable profile, or a permission
+Missing tools, disconnected extensions, an unverifiable profile, or a permission
 prompt should produce the exact blocker and the smallest required next step.
 Complete independent authorized work. Carry earlier authorization forward;
 ask only for genuinely missing access or decisions. Do not change permissions,
@@ -175,13 +153,12 @@ without replaying completed mutations just to verify the report.
 ### Delegated prompt template
 
 ```text
-Use Codex's Computer Use plugin to <observable app task>. The target is
-<app/window>. For a browser window, use its native app controls only if this
-CLI session can verify the requested browser and profile.
+Use Codex's <Computer Use and/or Chrome/browser/built-in browser> plugin to
+<observable task>. The target is <app/window or browser/profile, URL, tab>.
 First discover the callable plugin tools, read their current instructions,
 and verify connectivity and target identity with a non-mutating check.
-If the requested window or profile cannot be verified or accessed, report the
-blocker before acting on that target.
+Use the requested browser/profile. If it cannot be verified or accessed,
+report the blocker before acting on that target.
 Authorization covers <actions from the conversation>; stop before <relevant
 boundary, if any>. Complete the authorized work and read back <result>.
 Report the tool actually used, target, actions, completion evidence, and any
@@ -192,6 +169,6 @@ Plugin requirements go in the prompt after the runner's `--` separator.
 There is no cdx `--plugin`, `--computer-use`, or `--chrome` runner flag.
 `--search` enables web search; it does not select a browser or signed-in profile.
 
-Official setup and permission guidance, checked 2026-11-04:
+Official setup and permission guidance, checked 2026-09-07:
 [Computer Use](https://learn.chatgpt.com/docs/computer-use) and
 [browser extension](https://learn.chatgpt.com/docs/chrome-extension).

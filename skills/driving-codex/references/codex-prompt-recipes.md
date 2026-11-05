@@ -68,21 +68,20 @@ check before proceeding. This task is read-only; do not change the setting.
 Return the tool actually used, target, observed value, and any blocker.
 ```
 
-For a browser action in a Codex CLI session, only after a live native app check
-has verified the requested browser window and profile:
+For a browser action the user has authorized:
 
 ```text
-Use Codex's Computer Use plugin with the native <browser app/window/profile>
-at <URL> to <authorized action>. Discover the current tools and verify the
-window, profile, and page before acting. If the requested target is unavailable
-or ambiguous, report that blocker. Read back <saved result> after the action.
+Use Codex's Chrome/browser plugin with <browser/profile> at <URL> to
+<authorized action>. Discover the current tools and verify the browser,
+profile, and page before acting. If the requested target is unavailable or
+ambiguous, report that blocker. Read back <saved result> after the action.
 Return the actual tool, verified target, actions taken, completion evidence,
 and any remaining work. <Relevant stop boundary, if any.>
 ```
 
-Use cdx's direct native browser-app controls for browser tasks when possible.
-A named profile remains part of the task across resume or fork; check the
-window and profile again when UI state may have changed.
+Name both plugins for a workflow spanning a desktop app and browser. A named
+profile remains part of the task across resume or fork, but connectivity and
+target identity need checking again when the UI state may have changed.
 
 ## Prompt patching
 

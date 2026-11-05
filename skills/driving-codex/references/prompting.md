@@ -72,11 +72,11 @@ settings.
   `Evidence`, `Boundary`, and `Next step`. Reject shorthand such as
   "Codex cannot commit" when the evidence only shows a sandbox or network
   restriction.
-- For a desktop app task, explicitly require Computer Use in the delegated
-  prompt. Carry over the exact app and window. Require a live capability and
-  target check, the actual tool used, and a read-back of the result. For a
-  browser task, read `cdx:codex-computer-use` and use cdx's direct native
-  browser-app controls when the requested window and profile can be verified.
+- For a desktop or browser task, explicitly require the Computer Use,
+  Chrome/browser, or built-in browser plugin in the delegated prompt.
+  Carry over the exact app, browser/profile, and tab context. Require
+  live capability and target checks, the actual tool used, and a read-back
+  of the result. Read `cdx:codex-computer-use` for the handoff contract.
 
 Resume or fork follow-ups should usually contain the delta instruction.
 Restate scope only when it changed or the saved context could be ambiguous.

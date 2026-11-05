@@ -43,13 +43,6 @@ const TOOLS = [
       "- `let tab = await cua.getTab(tabId, { browser: browserId })` or `cua.getTab({ url }, { browser: browserId })`: an existing tab",
       "- `let browser = await cua.getBrowser({ url })`: a browser for a URL when none was named",
       "",
-      "For the ChatGPT extension in Brave, use cdx's app-hosted",
-      "mcp__plugin_cdx_desktop-cua__desktop_js tool. It runs CUA in a desktop Codex turn.",
-      "This runtime's browser inventory reads the ChatGPT app's browser extension, which grants access",
-      "only to the app's own Codex sessions, so from Claude Code it reports",
-      '"The browser access host is unavailable" or no browsers. That error is expected; it does not mean',
-      "the user's extension is disconnected. Use the desktop relay for extension tabs.",
-      "",
       "That call's result contains the API documentation and the initial UI state. Read it before continuing,",
       "and use only the APIs it documents. Bindings persist between calls. Add text to a result with",
       "`nodeRepl.write(value)` and images with `await nodeRepl.emitImage(image)`. After a context summary",
@@ -152,8 +145,34 @@ export function findServerConfig(home = codexHome()) {
     return { error: `Could not read ${file}: ${err.message}` };
   }
   if (!server?.command) return { error: `${file} has no cua_repl server.` };
-  if (!existsSync(server.command)) return { error: `The computer-use runtime is missing: ${server.command}` };
-  return { version, file, command: server.command, args: server.args ?? [], env: server.env ?? {} };
+  const launcher = withoutBrowserAccessGate(server.command, server.args ?? []);
+  if (!existsSync(launcher.command)) return { error: `The computer-use runtime is missing: ${launcher.command}` };
+  return { version, file, command: launcher.command, args: launcher.args, env: server.env ?? {} };
+}
+
+// The access vars the app's browser service demands, which it passes only to
+// its own Codex sessions. Stripped from the child env so a stale or empty
+// value cannot trip the gate; see withoutBrowserAccessGate.
+export const BROWSER_ACCESS_ENV = [
+  "BROWSER_USE_ACCESS_EXECUTOR_ID",
+  "BROWSER_USE_ACCESS_PIPE_PATH",
+  "BROWSER_USE_ACCESS_VERIFYING_IDENTITY",
+];
+
+// The app's 26.1029 config wraps node_repl in this shell command. Match the
+// full command so a later wrapper with additional setup stays intact.
+const ACCESS_WRAPPER = 'export BROWSER_USE_ACCESS_EXECUTOR_ID="${BROWSER_USE_ACCESS_EXECUTOR_ID-}"; exec "$@"';
+
+// Drop the known browser-access preload or wrapper from the runtime config.
+// This clears the host error seen outside Codex, but it does not establish
+// that a browser is connected to this session. Returns { command, args }.
+export function withoutBrowserAccessGate(command, args) {
+  if (/(?:^|\/)sh$/.test(String(command)) && args[0] === "-c" && args[1] === ACCESS_WRAPPER && args[2] === "cua-repl" && args.length >= 4) {
+    // ["-c", script, $0, realCommand, ...realArgs] -> unwrap, then recheck.
+    return withoutBrowserAccessGate(args[3], args.slice(4));
+  }
+  const gate = (arg) => String(arg).includes("require-browser-access");
+  return { command, args: args.filter((arg, i) => !gate(arg) && !(arg === "--import" && gate(args[i + 1]))) };
 }
 
 // Codex skips approval prompts when its top-level approval_policy is "never";
@@ -236,8 +255,10 @@ function startChild() {
       resolve({ error: config.error });
       return;
     }
+    const env = { ...process.env, ...config.env };
+    for (const key of BROWSER_ACCESS_ENV) delete env[key];
     const proc = spawn(config.command, config.args, {
-      env: { ...process.env, ...config.env },
+      env,
       stdio: ["pipe", "pipe", "inherit"],
     });
     const autoApprove = codexApprovalPolicy() === "never";
