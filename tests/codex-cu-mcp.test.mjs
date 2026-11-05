@@ -55,13 +55,13 @@ test("the newest installed plugin version supplies the command, args, and env", 
   assert.equal(config.env.BROWSER_USE_CODEX_APP_VERSION, "26.1007.30912");
 });
 
-test("the app's browser access preload stays in the runtime args", { skip: !darwin }, () => {
+test("the browser access preload is left out of the args", { skip: !darwin }, () => {
   const home = codexHome({});
   installPlugin(home, "26.1023.50603", process.execPath, ["--import", "file:///x/require-browser-access.mjs", "/x/cua-repl.mjs"]);
-  assert.deepEqual(findServerConfig(home).args, ["--import", "file:///x/require-browser-access.mjs", "/x/cua-repl.mjs"]);
+  assert.deepEqual(findServerConfig(home).args, ["/x/cua-repl.mjs"]);
 });
 
-test("the app's browser access shell wrapper stays intact", { skip: !darwin }, () => {
+test("the 26.1029 browser access shell wrapper is unwrapped to the real runtime", { skip: !darwin }, () => {
   const home = codexHome({});
   installPlugin(home, "26.1029.61003", "/bin/sh", [
     "-c",
@@ -71,14 +71,17 @@ test("the app's browser access shell wrapper stays intact", { skip: !darwin }, (
     "/x/cua-repl.mjs",
   ]);
   const config = findServerConfig(home);
+  assert.equal(config.command, process.execPath);
+  assert.deepEqual(config.args, ["/x/cua-repl.mjs"]);
+});
+
+test("an unfamiliar shell wrapper stays intact", { skip: !darwin }, () => {
+  const home = codexHome({});
+  const script = 'export BROWSER_USE_ACCESS_EXECUTOR_ID="${BROWSER_USE_ACCESS_EXECUTOR_ID-}"; export NEW_SETTING=1; exec "$@"';
+  installPlugin(home, "26.1030.1", "/bin/sh", ["-c", script, "cua-repl", process.execPath]);
+  const config = findServerConfig(home);
   assert.equal(config.command, "/bin/sh");
-  assert.deepEqual(config.args, [
-    "-c",
-    'export BROWSER_USE_ACCESS_EXECUTOR_ID="${BROWSER_USE_ACCESS_EXECUTOR_ID-}"; exec "$@"',
-    "cua-repl",
-    process.execPath,
-    "/x/cua-repl.mjs",
-  ]);
+  assert.deepEqual(config.args, ["-c", script, "cua-repl", process.execPath]);
 });
 
 test("a missing plugin or runtime is an error to report, not a crash", { skip: !darwin }, () => {

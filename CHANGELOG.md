@@ -1,30 +1,5 @@
 # Changelog
 
-## 0.8.4 - 2026-11-04
-
-- Add `desktop-cua` for ChatGPT desktop browser extension tabs. Claude sends
-  JavaScript to a visible Codex desktop chat, which calls its authorized
-  `cua_repl.js`; cdx verifies the exact code in the turn record and returns
-  the CUA output. Later calls reuse the chat and support `desktop_js_reset`.
-- Verify the app's window IPC protocol before use. A live 26.1029.61003 check
-  found the connected Brave profile, bound an existing tab, and returned the
-  recorded CUA result through the new MCP server.
-- Propagate cancelled MCP requests and timeouts to the desktop Codex turn.
-
-## 0.8.3 - 2026-11-04
-
-- Preserve the ChatGPT app's computer-use launch command and browser access
-  settings. The 0.8.2 launcher hid browser-access errors while still returning
-  no connected browsers, because a separate cdx runtime cannot assume access
-  to the desktop app's browser extension.
-- Direct browser work can use native Computer Use on the browser app. On
-  26.1029, cdx selected a Brave tab, read the updated accessibility state, and
-  restored the original tab. The native path uses the visible browser window;
-  it does not provide extension tab handles or DOM access.
-- Update the tool and delegation guidance so an empty or failed extension
-  inventory leads to the native browser-app path instead of a false connection
-  diagnosis or an unsupported Codex CLI browser handoff.
-
 ## 0.8.2 - 2026-11-04
 
 - Handle the ChatGPT 26.1029 computer-use shell wrapper and remove the browser

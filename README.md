@@ -43,11 +43,11 @@ supported; use the marketplace matching your existing installation.
   schemas are selected per task while preserving your explicit choices.
 - **Structured output over prose relay.** Reviews and reports come back as
   JSON (`--output-schema`) that Claude parses, verifies, and acts on.
-- **Codex owns its state.** Sessions live in `~/.codex`; cdx keeps no
-  companion daemon. The desktop browser relay keeps temporary records for its
-  visible Codex chat while its MCP server runs. The mod records which Codex
-  session each Codex agent owns in Claude Code's mod store and drops it after
-  30 days unused.
+- **Codex owns its state.** Sessions live in `~/.codex`; cdx keeps no job
+  registry, no state files, no companion daemon. One small runner script tames
+  the JSONL event stream; everything else is the CLI itself. The one
+  exception is the mod's record of which Codex session each Codex agent
+  owns, kept in Claude Code's mod store and dropped after 30 days unused.
 
 ## Skills
 
@@ -144,27 +144,11 @@ about that app again, in Claude Code or in Codex. The cdx mod
 also tells the runtime when each turn ends, as Codex does, so it can release
 browser tabs.
 
-The ChatGPT browser extension belongs to the desktop app's session. A cdx
-runtime launched from Claude Code can return an empty browser inventory even
-while the desktop app sees Brave. For extension tabs, use the separate
-`mcp__plugin_cdx_desktop-cua__desktop_js` tool. It starts a visible Codex chat
-inside the current ChatGPT desktop app, passes Claude's JavaScript to that
-chat's `cua_repl.js`, checks that Codex called it with exactly the supplied
-code, and returns the recorded CUA tool result. Later calls continue the same
-desktop chat, so CUA JavaScript bindings persist. `desktop_js_reset` resets
-them. The first `desktop_js` call must be one CUA entry call, such as
-`await cua.getState();`.
-
-This relay uses Codex allowance and the app's local window socket. It is
-model-mediated, not a direct MCP connection from Claude Code to the browser
-service. The app may display the relay chat in the sidebar. On ChatGPT
-26.1029.61003, a live relay check found the connected Brave profile and bound
-an existing tab through `cua.getTab` without a browser pipe error. An app
-update may change the undocumented window protocol; cdx checks its method
-versions before each new desktop chat and stops on a mismatch.
-
-For browser window menus or dialogs outside a page, the direct `computer-use`
-tool can still use native macOS app control through `cua.getApp()`.
+Browsers use the ChatGPT Chrome and Brave extensions. The launcher handles the
+browser-access preload in app build 26.1023 and the shell wrapper in 26.1029.
+This clears the "The browser access host is unavailable" error, but a browser
+must still appear in `cua.getState()` before cdx can use it. If the list is
+empty, delegate the browser task to Codex.
 
 Native app control uses the Sky computer-use service. With
 `approval_policy = "never"`, cdx now advertises MCP form elicitation to the
@@ -178,31 +162,34 @@ This uses unofficial OpenAI internals, not a published API. An update to the
 ChatGPT app can change or break it. Set `CDX_CU_TRACE=<file>` to log the MCP
 messages when troubleshooting.
 
-## Delegating Computer Use to Codex
+## Delegating Computer Use and browsers to Codex
 
-Ask Claude to delegate a desktop app task to Codex when its runtime has the
-required app access:
+Ask Claude to delegate a UI task to Codex when Codex's installed plugins have
+the app or browser access the task needs:
 
 ```text
 Have Codex use its Computer Use plugin to inspect the app's Preferences window
 and report the current export format. This is a read-only check.
+
+Delegate the signed-in settings check to Codex using its Chrome plugin in the
+Work profile. Verify the profile and report whether notifications are enabled.
+
+Have Codex use the built-in browser to verify the navigation on localhost:3000.
 ```
 
 Claude names Codex and the requested plugin before launching. Codex checks its
 available tools and the target, completes the authorized task, and reads back
 the result. The report distinguishes actual plugin use from installed state.
-The cdx runner starts Codex CLI, which does not inherit the desktop app's
-browser extension or built-in browser. Use the app-hosted `desktop_js` relay
-above for Brave extension work from Claude Code.
+If the requested browser/profile cannot be verified, Codex reports that blocker.
 
-Computer Use must be available in the delegated Codex session with the
-required app permission. cdx does not install it. Plugin packaging and tool
-APIs can vary across Codex versions; the skill requires discovery from the
-running session's instructions.
+Computer Use and browser plugins must be available in the delegated Codex
+session, with the required app permissions or browser connection. cdx does not
+install them. Plugin packaging and tool APIs can vary across Codex versions;
+the skill requires discovery from the running session's instructions.
 
-Ask Claude to check the Codex setup for Computer Use to inspect installation,
-and to add a live smoke test with the desired app and target. The live check
-consumes normal Codex usage.
+Ask Claude to check the Codex setup for Computer Use or browser plugins to
+inspect installation, and to add a live smoke test with the desired
+capability and target for a non-mutating live check. The live check consumes normal Codex usage.
 See the [delegation skill](skills/codex-computer-use/SKILL.md) for the prompt
 contract and [official setup](https://learn.chatgpt.com/docs/computer-use).
 
