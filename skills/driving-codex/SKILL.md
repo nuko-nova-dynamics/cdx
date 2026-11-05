@@ -13,11 +13,12 @@ Claude's to make without asking, unless the user named a model, effort,
 or scope.
 
 For desktop apps, browser workflows, or visual verification, also read
-`cdx:codex-computer-use`. Before launching, announce that the task is being
-delegated to Codex, name the model and effort chosen and the reason in one
-clause, and name the requested plugin and app or browser/profile.
-Include those requirements in Codex's prompt and verify actual tool use in
-its result. Plugin selection is a prompt requirement, not a runner flag.
+`cdx:codex-computer-use`. Before launching a desktop app task, announce the
+Codex handoff, the model and effort with a brief reason, and the Computer Use
+plugin and target app. Include those requirements in the prompt and verify
+actual tool use. The Codex CLI does not inherit the ChatGPT desktop browser
+extension or built-in browser; use cdx's direct native browser-app controls
+for browser tasks when the requested window and profile can be verified.
 
 Before writing a non-trivial prompt for Codex, read
 [references/prompting.md](references/prompting.md).
@@ -98,7 +99,7 @@ Rules that go with the table:
   through a proxy, run workers without `--lean`. `--lean` needs an explicit
   model and effort and is not available on resume, fork, or `--local`.
   Keep the full config for planning and review sessions, anything that
-  needs Computer Use, Chrome, a browser profile, or an MCP server, and
+  needs Computer Use or an MCP server, and
   for the user's own interactive work.
 - A worker brief scopes style and ordering rules to prose being added or
   intentionally revised, preserves unrelated text, and requires disclosure
@@ -383,7 +384,7 @@ Every worker resends its context on each turn, so more workers add usage.
 Choose each worker's model and effort from "Choose the model first":
 Luna for bounded work with a full brief, Sol for broader judgment, planning,
 review, and merging. Never fan out Astra. Use `--lean` for mechanical workers;
-workers that need a browser, desktop app, or MCP server run with the full
+workers that need a desktop app or MCP server run with the full
 configuration. Serialize workers sharing UI state.
 
 For second opinions, give each worker one angle on the same task, with

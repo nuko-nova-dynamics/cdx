@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.3 - 2026-11-04
+
+- Preserve the ChatGPT app's computer-use launch command and browser access
+  settings. The 0.8.2 launcher hid browser-access errors while still returning
+  no connected browsers, because a separate cdx runtime cannot assume access
+  to the desktop app's browser extension.
+- Direct browser work can use native Computer Use on the browser app. On
+  26.1029, cdx selected a Brave tab, read the updated accessibility state, and
+  restored the original tab. The native path uses the visible browser window;
+  it does not provide extension tab handles or DOM access.
+- Update the tool and delegation guidance so an empty or failed extension
+  inventory leads to the native browser-app path instead of a false connection
+  diagnosis or an unsupported Codex CLI browser handoff.
+
 ## 0.8.2 - 2026-11-04
 
 - Handle the ChatGPT 26.1029 computer-use shell wrapper and remove the browser

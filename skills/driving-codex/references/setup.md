@@ -43,9 +43,12 @@ asks for them or the failure points there.
    `mcp__plugin_cdx_computer-use__js` is available, and with a live smoke test call it
    once with `await cua.getState();`. Report a tool error (no ChatGPT app or
    no unified-computer-use plugin) as the missing prerequisite. Report any
-   entry in the result's `errors`. For "The browser access host is
-   unavailable", update cdx and retry. An empty browser list is not a passed
-   browser check. For "Sky Computer Use native pipe startup failed", retry a
+   entry in the result's `errors`. An empty browser list or browser access
+   error does not prove that the desktop extension is disconnected. If the
+   requested browser appears under `apps`, bind it with `cua.getApp()`, verify
+   the native window and profile, and perform a read-only check there. Report
+   extension and DOM access as unavailable to this runtime. For "Sky Computer
+   Use native pipe startup failed", retry a
    fresh read-only call before diagnosing it; if it persists, delegate the app
    task to Codex. Do not infer a permanent caller restriction from that error.
 

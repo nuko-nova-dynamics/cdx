@@ -144,11 +144,23 @@ about that app again, in Claude Code or in Codex. The cdx mod
 also tells the runtime when each turn ends, as Codex does, so it can release
 browser tabs.
 
-Browsers use the ChatGPT Chrome and Brave extensions. The launcher handles the
-browser-access preload in app build 26.1023 and the shell wrapper in 26.1029.
-This clears the "The browser access host is unavailable" error, but a browser
-must still appear in `cua.getState()` before cdx can use it. If the list is
-empty, delegate the browser task to Codex.
+The ChatGPT browser extension belongs to the desktop app's session. A cdx
+runtime launched from Claude Code can return an empty browser inventory or a
+browser access error even while the desktop app sees a connected browser. cdx
+now keeps the app's runtime command and access settings intact, so it reports
+that error instead of hiding it.
+
+For direct browser work, use the browser as a native macOS app. If
+`cua.getState()` lists Brave Browser or Google Chrome under `apps`, call
+`cua.getApp()` with that app name, verify the window or profile from its
+accessibility state, and use the documented click, keyboard, and screenshot
+methods. A live 26.1029 check selected a Brave tab, read the changed state, and
+restored the original tab. This path does not provide extension tab handles or
+DOM access. An empty `browsers` list does not mean the desktop extension is
+disconnected.
+
+For example, ask Claude: "Use cdx Computer Use to inspect my open Brave window
+as a native app. Verify the window and profile, then read back the result."
 
 Native app control uses the Sky computer-use service. With
 `approval_policy = "never"`, cdx now advertises MCP form elicitation to the
@@ -162,34 +174,33 @@ This uses unofficial OpenAI internals, not a published API. An update to the
 ChatGPT app can change or break it. Set `CDX_CU_TRACE=<file>` to log the MCP
 messages when troubleshooting.
 
-## Delegating Computer Use and browsers to Codex
+## Delegating Computer Use to Codex
 
-Ask Claude to delegate a UI task to Codex when Codex's installed plugins have
-the app or browser access the task needs:
+Ask Claude to delegate a desktop app task to Codex when its runtime has the
+required app access:
 
 ```text
 Have Codex use its Computer Use plugin to inspect the app's Preferences window
 and report the current export format. This is a read-only check.
-
-Delegate the signed-in settings check to Codex using its Chrome plugin in the
-Work profile. Verify the profile and report whether notifications are enabled.
-
-Have Codex use the built-in browser to verify the navigation on localhost:3000.
 ```
 
 Claude names Codex and the requested plugin before launching. Codex checks its
 available tools and the target, completes the authorized task, and reads back
 the result. The report distinguishes actual plugin use from installed state.
-If the requested browser/profile cannot be verified, Codex reports that blocker.
+The cdx runner starts Codex CLI, which does not inherit the desktop app's
+browser extension or built-in browser. For browser tasks, use the direct native
+app path above. If the requested browser window or profile cannot be verified,
+report that blocker; a task requiring extension or DOM access belongs in the
+ChatGPT desktop app.
 
-Computer Use and browser plugins must be available in the delegated Codex
-session, with the required app permissions or browser connection. cdx does not
-install them. Plugin packaging and tool APIs can vary across Codex versions;
-the skill requires discovery from the running session's instructions.
+Computer Use must be available in the delegated Codex session with the
+required app permission. cdx does not install it. Plugin packaging and tool
+APIs can vary across Codex versions; the skill requires discovery from the
+running session's instructions.
 
-Ask Claude to check the Codex setup for Computer Use or browser plugins to
-inspect installation, and to add a live smoke test with the desired
-capability and target for a non-mutating live check. The live check consumes normal Codex usage.
+Ask Claude to check the Codex setup for Computer Use to inspect installation,
+and to add a live smoke test with the desired app and target. The live check
+consumes normal Codex usage.
 See the [delegation skill](skills/codex-computer-use/SKILL.md) for the prompt
 contract and [official setup](https://learn.chatgpt.com/docs/computer-use).
 
