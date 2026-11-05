@@ -113,24 +113,59 @@ export function extractCuaResult(rollout, turnId, expectedTool, expectedCode) {
   });
 }
 
-function runRelay(args, env, timeoutMs) {
+export function runRelay(args, env, timeoutMs, { signal, onTask, onStopped, script = RELAY } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.env.CDX_DESKTOP_RELAY_PYTHON || "python3", [RELAY, ...args], {
-      env, stdio: ["ignore", "pipe", "pipe"],
+    if (signal?.aborted) return reject(new Error("Desktop CUA request cancelled."));
+    const child = spawn(process.env.CDX_DESKTOP_RELAY_PYTHON || "python3", [script, ...args], {
+      env, stdio: ["ignore", "pipe", "pipe"], detached: true,
     });
-    let stdout = "", stderr = "";
-    const timer = setTimeout(() => child.kill("SIGTERM"), timeoutMs);
-    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    let stdout = "", stderr = "", pendingLine = "";
+    let stopped = null;
+    const stop = (reason) => {
+      if (stopped) return;
+      stopped = reason;
+      // The relay's first-chat bootstrap starts a child CLI. Stop the whole
+      // process group so cancellation cannot leave that bootstrap running.
+      try { if (child.pid) process.kill(-child.pid, "SIGTERM"); } catch {}
+    };
+    const timer = setTimeout(() => stop("timed out"), timeoutMs);
+    const abort = () => stop("cancelled");
+    signal?.addEventListener("abort", abort, { once: true });
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+      pendingLine += chunk;
+      let newline;
+      while ((newline = pendingLine.indexOf("\n")) !== -1) {
+        const line = pendingLine.slice(0, newline);
+        pendingLine = pendingLine.slice(newline + 1);
+        try {
+          const event = JSON.parse(line);
+          if (typeof event.task === "string") onTask?.(event.task);
+        } catch {}
+      }
+    });
     child.stderr.on("data", (chunk) => { stderr = (stderr + chunk).slice(-1500); });
-    child.on("error", (error) => { clearTimeout(timer); reject(error); });
-    child.on("close", (code) => {
+    child.on("error", (error) => {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      reject(error);
+    });
+    child.on("close", async (code) => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
       const events = stdout.split("\n").filter(Boolean).flatMap((line) => {
         try { return [JSON.parse(line)]; } catch { return []; }
       });
+      if (stopped) {
+        const createdTask = events.find((event) => typeof event.task === "string")?.task;
+        try { await onStopped?.(createdTask); }
+        catch (failure) { return reject(new Error(`Desktop CUA ${stopped}; could not confirm the desktop turn stopped: ${failure.message}`)); }
+        return reject(new Error(`Desktop CUA ${stopped}.`));
+      }
       if (code !== 0) {
         const failure = new Error(events.at(-1)?.error || stderr || `Desktop relay exited ${code}.`);
         failure.taskId = events.find((event) => typeof event.task === "string")?.task;
+        failure.event = events.at(-1);
         return reject(failure);
       }
       resolve(events);
@@ -156,7 +191,16 @@ if (taskId && !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(taskId)) {
 }
 let busy = false;
 
-async function executeDesktop(tool, code, timeoutSeconds) {
+async function interruptDesktopTask() {
+  if (!taskId) return;
+  try { await runRelay(["interrupt", taskId], relayEnv(), 35000); }
+  catch (failure) {
+    // A cancelled bootstrap can leave a chat with no running turn.
+    if (failure.event?.action !== "none") throw failure;
+  }
+}
+
+async function executeDesktop(tool, code, timeoutSeconds, signal) {
   if (busy) throw new Error("Another desktop CUA call is still running.");
   if (tool === "js_reset" && !taskId) return { content: [{ type: "text", text: "CUA session is already fresh." }], isError: false };
   if (!bundledCodexBinary()) throw new Error("The ChatGPT desktop Codex binary is missing.");
@@ -169,12 +213,24 @@ async function executeDesktop(tool, code, timeoutSeconds) {
       ? ["send", taskId, "--allow-repeat", ...common]
       : ["new", "--title", "cdx desktop browser", "--cwd", workDir, ...common];
     let events;
-    try { events = await runRelay(args, relayEnv(), (timeoutSeconds + 20) * 1000); }
+    try {
+      events = await runRelay(args, relayEnv(), (timeoutSeconds + 20) * 1000, {
+        signal,
+        onTask: (createdTask) => { taskId ||= createdTask; },
+        onStopped: async (createdTask) => {
+          taskId ||= createdTask ?? null;
+          await interruptDesktopTask();
+        },
+      });
+    }
     catch (failure) { taskId ||= failure.taskId ?? null; throw failure; }
     taskId ||= events.find((event) => typeof event.task === "string")?.task ?? null;
     const result = events.at(-1);
     const wait = result?.wait;
-    if (wait?.state !== "completed") throw new Error(`Desktop CUA turn ${wait?.state || "did not complete"}; chat ${taskId || "unknown"}.`);
+    if (wait?.state !== "completed") {
+      await interruptDesktopTask();
+      throw new Error(`Desktop CUA turn ${wait?.state || "did not complete"}; chat ${taskId || "unknown"}.`);
+    }
     const turnId = wait.turn_id || result.turn_id;
     const recordPath = path.join(stateDir, "tasks", `${taskId}.json`);
     const record = JSON.parse(readFileSync(recordPath, "utf8"));
@@ -191,10 +247,15 @@ function error(id, message) { send({ jsonrpc: "2.0", id, result: { content: [{ t
 
 if (isMain) {
   const input = readline.createInterface({ input: process.stdin });
+  let active = null;
   input.on("line", async (line) => {
     let request;
     try { request = JSON.parse(line); } catch { return; }
     const { id, method, params = {} } = request;
+    if (method === "notifications/cancelled") {
+      if (active?.id === params.requestId) active.controller.abort();
+      return;
+    }
     if (method === "initialize") {
       const protocolVersion = PROTOCOLS.has(params.protocolVersion) ? params.protocolVersion : "2025-06-18";
       return send({ jsonrpc: "2.0", id, result: { protocolVersion, capabilities: { tools: {} }, serverInfo: { name: "cdx-desktop-cua", version: VERSION } } });
@@ -205,10 +266,16 @@ if (isMain) {
     if (tool !== "desktop_js" && tool !== "desktop_js_reset") return error(id, `Unknown tool: ${tool}`);
     const args = params.arguments ?? {};
     if (tool === "desktop_js" && (typeof args.code !== "string" || !args.code.trim())) return error(id, "code is required.");
+    if (active) return error(id, "Another desktop CUA call is still running.");
+    const controller = new AbortController();
+    active = { id, controller };
     try {
-      const result = await executeDesktop(tool === "desktop_js" ? "js" : "js_reset", args.code, args.timeout_seconds ?? 180);
-      send({ jsonrpc: "2.0", id, result });
-    } catch (cause) { error(id, cause.message); }
+      const result = await executeDesktop(tool === "desktop_js" ? "js" : "js_reset", args.code, args.timeout_seconds ?? 180, controller.signal);
+      if (!controller.signal.aborted) send({ jsonrpc: "2.0", id, result });
+    } catch (cause) {
+      if (!controller.signal.aborted) error(id, cause.message);
+      else if (!/^Desktop CUA cancelled\.$/.test(cause.message)) console.error(cause.message);
+    } finally { active = null; }
   });
 }
 if (scratch) process.on("exit", () => { rmSync(scratch, { recursive: true, force: true }); });

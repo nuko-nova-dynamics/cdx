@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { browserPrompt, extractCuaResult } from "../scripts/codex-desktop-cua-mcp.mjs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { browserPrompt, extractCuaResult, runRelay } from "../scripts/codex-desktop-cua-mcp.mjs";
 
 const line = (type, payload) => JSON.stringify({ type, payload });
 const start = (turn_id) => line("event_msg", { type: "task_started", turn_id });
@@ -39,4 +42,21 @@ test("rejects a desktop turn that changes the requested code", () => {
 test("accepts one recorded CUA reset", () => {
   const rollout = [start("current"), call("reset", "js_reset", {}), output("reset", "reset")].join("\n");
   assert.deepEqual(extractCuaResult(rollout, "current", "js_reset"), [{ type: "text", text: "reset" }]);
+});
+
+test("cancellation stops the relay process and reports its created task for interruption", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "cdx-cancel-test-"));
+  const script = path.join(directory, "relay.py");
+  writeFileSync(script, 'import json, time\nprint(json.dumps({"task": "test-task"}), flush=True)\ntime.sleep(30)\n');
+  const controller = new AbortController();
+  const interrupted = [];
+  try {
+    const running = runRelay([], process.env, 5000, {
+      signal: controller.signal, script,
+      onTask: () => controller.abort(),
+      onStopped: (task) => { interrupted.push(task); },
+    });
+    await assert.rejects(running, /Desktop CUA cancelled/);
+    assert.deepEqual(interrupted, ["test-task"]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });

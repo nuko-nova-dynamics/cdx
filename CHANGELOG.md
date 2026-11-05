@@ -9,6 +9,7 @@
 - Verify the app's window IPC protocol before use. A live 26.1029.61003 check
   found the connected Brave profile, bound an existing tab, and returned the
   recorded CUA result through the new MCP server.
+- Propagate cancelled MCP requests and timeouts to the desktop Codex turn.
 
 ## 0.8.3 - 2026-11-04
 
